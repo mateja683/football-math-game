@@ -67,6 +67,13 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .wordtext.miss{animation:wiggle .45s}
 .writepic{font-size:96px;text-align:center;line-height:1;margin-top:14px}
 .micstatus{text-align:center;font-size:20px;opacity:.9;min-height:28px;margin:4px 0}
+.micbtn{min-height:130px;width:100%;border-radius:28px;background:var(--yellow);color:var(--ink);font-size:24px;font-weight:800;
+  box-shadow:0 7px 0 #a88700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.micbtn span{font-size:54px;line-height:1}
+.micbtn.held{transform:translateY(5px);box-shadow:0 2px 0 #a88700;background:#ffe066}
+.linkbtn{display:block;margin:10px auto 0;padding:6px;background:none;font-size:18px;font-weight:700;
+  text-decoration:underline;opacity:.85}
 .judgebar{display:flex;flex-direction:column;gap:10px;margin-top:auto;margin-bottom:8px}
 .canvasbox{background:var(--chalk);border-radius:24px;flex:1;min-height:190px;margin:10px 0;
   box-shadow:0 6px 0 rgba(0,0,0,.25);touch-action:none;overflow:hidden}
@@ -279,8 +286,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <p class="wordtext" id="readWord">cat</p>
   </div>
   <p class="micstatus" id="micStatus" hidden></p>
-  <button class="countbtn" id="readMic" hidden>🎤 Press and say the word</button>
-  <div class="judgebar">
+  <button class="micbtn" id="readMic" hidden><span>🎤</span>Hold and say the word</button>
+  <button class="linkbtn" id="readAskGrownup" hidden>Ask a grown-up to check instead</button>
+  <div class="judgebar" id="readJudge" hidden>
     <button class="big" id="readRight">✓ That's right</button>
     <button class="plain" id="readAgain">Try again</button>
   </div>
@@ -855,7 +863,9 @@ function readNext(){
   RD.lastWord = w.w; RD.word = w;
   $('#readWord').textContent = w.w; $('#readWord').classList.remove('miss');
   $('#micStatus').hidden = true; $('#micStatus').textContent = '';
-  $('#readMic').hidden = !recognizer;
+  $('#readMic').hidden = !recognizer; $('#readMic').classList.remove('held');
+  $('#readAskGrownup').hidden = !recognizer;
+  $('#readJudge').hidden = !!recognizer;
 }
 function readMark(correct){
   if (correct){
@@ -870,22 +880,40 @@ function readMark(correct){
 }
 $('#readRight').onclick = () => readMark(true);
 $('#readAgain').onclick = () => readMark(false);
+$('#readAskGrownup').onclick = () => { $('#readJudge').hidden = false; $('#readAskGrownup').hidden = true; };
 $('#readingHome').onclick = () => { hush(); if (recognizer) try { recognizer.abort(); } catch(e) {} show('category'); };
 if (recognizer){
   recognizer.onresult = e => {
     const said = [...e.results[0]].map(r => r.transcript.toLowerCase().trim());
     $('#micStatus').hidden = false;
     if (said.some(s => s === RD.word.w)){ $('#micStatus').textContent = `I heard "${said[0]}" — well done!`; readMark(true); }
-    else $('#micStatus').textContent = `I heard "${said[0]}" — ask a grown-up to check!`;
+    else $('#micStatus').textContent = `I heard "${said[0]}" — hold the mic and try again.`;
   };
-  recognizer.onerror = () => { RD.listening = false; $('#readMic').classList.remove('nudge'); $('#micStatus').hidden = false; $('#micStatus').textContent = "Couldn't hear that — ask a grown-up to check instead."; };
-  recognizer.onend = () => { RD.listening = false; $('#readMic').classList.remove('nudge'); };
-  $('#readMic').onclick = () => {
+  recognizer.onerror = e => {
+    RD.listening = false; $('#readMic').classList.remove('held');
+    $('#micStatus').hidden = false;
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      $('#micStatus').textContent = "Microphone isn't available — ask a grown-up to check instead.";
+      $('#readJudge').hidden = false; $('#readAskGrownup').hidden = true;
+    } else if (e.error !== 'no-speech' && e.error !== 'aborted'){
+      $('#micStatus').textContent = "Didn't catch that — hold the mic and try again.";
+    } else {
+      $('#micStatus').hidden = true;
+    }
+  };
+  recognizer.onend = () => { RD.listening = false; $('#readMic').classList.remove('held'); };
+  const micDown = e => {
+    e.preventDefault();
     if (RD.listening) return;
-    RD.listening = true; $('#readMic').classList.add('nudge');
+    RD.listening = true; $('#readMic').classList.add('held');
     $('#micStatus').hidden = false; $('#micStatus').textContent = 'Listening…';
-    try { recognizer.start(); } catch(e) { RD.listening = false; $('#readMic').classList.remove('nudge'); }
+    try { $('#readMic').setPointerCapture(e.pointerId); } catch(err) {}
+    try { recognizer.start(); } catch(err) { RD.listening = false; $('#readMic').classList.remove('held'); }
   };
+  const micUp = () => { if (RD.listening) try { recognizer.stop(); } catch(e) {} };
+  $('#readMic').addEventListener('pointerdown', micDown);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev => $('#readMic').addEventListener(ev, micUp));
+  $('#readMic').addEventListener('contextmenu', e => e.preventDefault());
 }
 
 /* ---------- writing game ---------- */
