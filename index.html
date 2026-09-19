@@ -61,6 +61,23 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   display:flex;flex-direction:column;align-items:center;gap:10px;font-size:26px;font-weight:800}
 .catcard:active{transform:translateY(3px)}
 .caticon{font-size:64px;line-height:1}
+
+/* ---------- reading / writing ---------- */
+.wordtext{font-size:clamp(56px,18vw,108px);font-weight:800;text-align:center;margin:10px 0;letter-spacing:1px}
+.wordtext.miss{animation:wiggle .45s}
+.writepic{font-size:96px;text-align:center;line-height:1;margin-top:14px}
+.micstatus{text-align:center;font-size:20px;opacity:.9;min-height:28px;margin:4px 0}
+.micbtn{min-height:130px;width:100%;border-radius:28px;background:var(--yellow);color:var(--ink);font-size:24px;font-weight:800;
+  box-shadow:0 7px 0 #a88700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.micbtn span{font-size:54px;line-height:1}
+.micbtn.held{transform:translateY(5px);box-shadow:0 2px 0 #a88700;background:#ffe066}
+.linkbtn{display:block;margin:10px auto 0;padding:6px;background:none;font-size:18px;font-weight:700;
+  text-decoration:underline;opacity:.85}
+.judgebar{display:flex;flex-direction:column;gap:10px;margin-top:auto;margin-bottom:8px}
+.canvasbox{background:var(--chalk);border-radius:24px;flex:1;min-height:190px;margin:10px 0;
+  box-shadow:0 6px 0 rgba(0,0,0,.25);touch-action:none;overflow:hidden}
+#wc{width:100%;height:100%;display:block;touch-action:none}
 .kickoff:active,.big:active{transform:translateY(5px);box-shadow:0 2px 0 #a88700}
 .spacer{height:26px}
 .prizebtn{width:100%;min-height:60px;border-radius:22px;background:var(--chalk);color:var(--ink);font-size:24px;font-weight:800;
@@ -158,6 +175,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .pbtn.blue{background:#1d3f9e;border-color:#f5c400}
 .pbtn.red{background:repeating-linear-gradient(90deg,#d4152b 0 12px,#ffffff 12px 24px);text-shadow:0 0 6px #12301a,0 0 2px #12301a}
 .pbtn.claret{background:#7a263a;border-color:#7cc6ec}
+.pbtn.navy{background:#0a3a7a;border-color:#ffffff}
+.pbtn.garnet{background:repeating-linear-gradient(90deg,#003399 0 12px,#a50044 12px 24px);text-shadow:0 0 6px #12301a,0 0 2px #12301a}
+.pbtn.amber{background:#e6a817;border-color:#1c3f94}
 .pbtn.tl{top:max(12px,env(safe-area-inset-top));left:12px}
 .pbtn.tr{top:max(12px,env(safe-area-inset-top));right:12px}
 .pbtn.bl{bottom:max(12px,env(safe-area-inset-bottom));left:12px}
@@ -188,6 +208,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <pattern id="stripes" width="20" height="100" patternUnits="userSpaceOnUse">
       <rect width="10" height="100" fill="#d4152b"/><rect x="10" width="10" height="100" fill="#ffffff"/>
     </pattern>
+    <pattern id="stripes2" width="20" height="100" patternUnits="userSpaceOnUse">
+      <rect width="10" height="100" fill="#003399"/><rect x="10" width="10" height="100" fill="#a50044"/>
+    </pattern>
   </defs>
 </svg>
 
@@ -196,8 +219,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <h1 class="title">Goal<br>Maths</h1>
   <p class="lede">What would you like to play?</p>
   <div class="catgrid">
-    <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
+    <button class="catcard" id="goReading"><span class="caticon">📖</span><span>Reading games</span></button>
     <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
+    <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
   </div>
 </main>
 
@@ -212,6 +236,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="team" data-team="blue" aria-pressed="false"><span class="shirt"></span>Blue and yellow</button>
     <button class="team" data-team="red" aria-pressed="false"><span class="shirt"></span>Red and white</button>
     <button class="team" data-team="claret" aria-pressed="false"><span class="shirt"></span>Claret and blue</button>
+    <button class="team" data-team="navy" aria-pressed="false"><span class="shirt"></span>Blue and white</button>
+    <button class="team" data-team="garnet" aria-pressed="false"><span class="shirt"></span>Blue and garnet</button>
+    <button class="team" data-team="amber" aria-pressed="false"><span class="shirt"></span>Amber and blue</button>
   </div>
 
   <h2 class="label">Games</h2>
@@ -248,13 +275,54 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <button class="kickoff" id="kickoff">Kick off</button>
 </main>
 
-<!-- WRITING (placeholder) -->
-<main class="app end" id="writing" hidden>
-  <div class="trophy">✏️</div>
-  <h1>Coming soon!</h1>
-  <p>Writing games are on their way. For now, why not try the maths games?</p>
-  <button class="big" id="writingToMath">Play maths games</button>
-  <button class="plain" id="writingBack">Back</button>
+<!-- READING -->
+<main class="app" id="reading" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="readingHome" aria-label="Back to game categories">←</button>
+    <div class="slots" id="readSlots" aria-label="Words read"></div>
+  </div>
+  <h2 class="label" style="text-align:center">Read the word</h2>
+  <div class="stage">
+    <p class="wordtext" id="readWord">cat</p>
+  </div>
+  <p class="micstatus" id="micStatus" hidden></p>
+  <button class="micbtn" id="readMic" hidden><span>🎤</span>Hold and say the word</button>
+  <button class="linkbtn" id="readAskGrownup" hidden>Ask a grown-up to check instead</button>
+  <div class="judgebar" id="readJudge" hidden>
+    <button class="big" id="readRight">✓ That's right</button>
+    <button class="plain" id="readAgain">Try again</button>
+  </div>
+</main>
+
+<!-- WRITING -->
+<main class="app" id="writing" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="writingHome" aria-label="Back to game categories">←</button>
+    <div class="slots" id="writeSlots" aria-label="Words written"></div>
+  </div>
+  <h2 class="label" style="text-align:center">Write the word</h2>
+  <div class="writepic" id="writePic" aria-hidden="true">🐱</div>
+  <p class="wordtext" id="writeWord" hidden>cat</p>
+  <button class="countbtn" id="writeHint">Show hint</button>
+  <div class="canvasbox">
+    <canvas id="wc" aria-label="Write the word here"></canvas>
+  </div>
+  <div class="chips" style="justify-content:center">
+    <button class="chip" id="writeClear">Clear</button>
+  </div>
+  <div class="judgebar">
+    <button class="big" id="writeRight">✓ That's right</button>
+    <button class="plain" id="writeAgain">Try again</button>
+  </div>
+</main>
+
+<!-- READING / WRITING ROUND COMPLETE -->
+<main class="app end" id="wordEnd" hidden>
+  <div class="trophy">🏆</div>
+  <h1 id="wordEndTitle">Well done!</h1>
+  <p id="wordEndMsg"></p>
+  <button class="big" id="wordEndAgain">Play again</button>
+  <button class="plain" id="wordEndBack">Back to categories</button>
 </main>
 
 <!-- PLAY -->
@@ -339,7 +407,7 @@ const ROUND_LEN = 10;
 const PRIZE_THRESHOLD = 9;
 const MAX_NUM = 20;
 const ALL_MODES = ['count','add','take','more','next','make','flash','bigger'];
-const SESSION_LIMIT_MS = 10 * 60 * 1000;
+const SESSION_LIMIT_MS = 20 * 60 * 1000;
 
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('goalmaths') || '{}') || {}; } catch(e) {}
@@ -356,22 +424,31 @@ const S = {
 function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls})); } catch(e) {} }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 const TEAMS = {
-  blue:   {name:'blue and yellow', main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
-  red:    {name:'red and white',   main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
-  claret: {name:'claret and blue', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']}
+  blue:   {name:'blue and yellow',  main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
+  red:    {name:'red and white',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
+  claret: {name:'claret and blue',  main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
+  navy:   {name:'blue and white',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
+  garnet: {name:'blue and garnet',  main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
+  amber:  {name:'amber and blue',   main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']}
 };
+const STRIPED = {
+  red:    { url:'stripes',  base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
+  garnet: { url:'stripes2', base:'#003399', accent:'#a50044', dark:'#6d0033' }
+};
+const SLEEVED = ['claret','amber'];
 if (!TEAMS[S.team]) S.team = 'blue';
-const other = t => t === 'blue' ? 'red' : 'blue';
+const other = t => pick(Object.keys(TEAMS).filter(k => k !== t));
 const teamName = t => TEAMS[t].name;
 const cap = s => s[0].toUpperCase() + s.slice(1);
 
 /* ---------- drawing ---------- */
 function shirt(team, label){
-  const body = team === 'red' ? 'fill:url(#stripes)' : `fill:${TEAMS[team].main}`;
-  const trim = team === 'red' ? '#d4152b' : TEAMS[team].trim;
-  const cuff = team === 'claret' ? TEAMS.claret.main : trim;
-  const sleeves = team === 'claret'
-    ? `<path d="M30 10 L7 27 L18 43 L28 37 Z M70 10 L93 27 L82 43 L72 37 Z" fill="${TEAMS.claret.trim}" stroke="rgba(0,0,0,.35)" stroke-width="2.5" stroke-linejoin="round"/>` : '';
+  const st = STRIPED[team];
+  const body = st ? `fill:url(#${st.url})` : `fill:${TEAMS[team].main}`;
+  const trim = st ? st.accent : TEAMS[team].trim;
+  const cuff = SLEEVED.includes(team) ? TEAMS[team].main : trim;
+  const sleeves = SLEEVED.includes(team)
+    ? `<path d="M30 10 L7 27 L18 43 L28 37 Z M70 10 L93 27 L82 43 L72 37 Z" fill="${TEAMS[team].trim}" stroke="rgba(0,0,0,.35)" stroke-width="2.5" stroke-linejoin="round"/>` : '';
   const txt = label === undefined ? '' :
     `<text x="50" y="72" text-anchor="middle" font-family="Baloo 2, Trebuchet MS, sans-serif" font-weight="800" font-size="${String(label).length > 1 ? 34 : 40}"
       fill="${label === '?' ? '#f5c400' : '#ffffff'}" stroke="#12301a" stroke-width="5" paint-order="stroke" stroke-linejoin="round">${label}</text>`;
@@ -449,7 +526,7 @@ function thud(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['category','start','play','end','prize','gate','writing'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','start','play','end','prize','gate','reading','writing','wordEnd'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#prizeEnd').hidden = S.prizes < 1;
   window.scrollTo(0,0);
@@ -466,10 +543,20 @@ function confetti(team){
 
 /* ---------- category screen ---------- */
 $('#goMath').onclick = () => show('start');
-$('#goWriting').onclick = () => show('writing');
+$('#goReading').onclick = () => readStart();
+$('#goWriting').onclick = () => writeStart();
 $('#toCategory').onclick = () => show('category');
-$('#writingToMath').onclick = () => show('start');
-$('#writingBack').onclick = () => show('category');
+$('#wordEndAgain').onclick = () => wordEndReplay && wordEndReplay();
+$('#wordEndBack').onclick = () => show('category');
+function wordEnd(kind, msg, replay){
+  $('#wordEndTitle').textContent = kind === 'reading' ? 'Well read!' : 'Well written!';
+  $('#wordEndMsg').textContent = msg;
+  wordEndReplay = replay;
+  show('wordEnd');
+  whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
+  confetti(S.team);
+}
+let wordEndReplay = null;
 
 /* ---------- start screen ---------- */
 $$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => { S.team = b.dataset.team; save(); syncStart(); }; });
@@ -581,8 +668,9 @@ function make(){
   }
   const gap = 2;
   let a, b; do { a = ri(1, max); b = ri(1, max); } while (Math.abs(a - b) < gap);
-  const ans = a > b ? S.team : other(S.team);
-  return {mode:'more', key:`m${a}${b}`, a, b, ans, text:'Which team has more players?', say:'Which team has more players?',
+  const opp = other(S.team);
+  const ans = a > b ? S.team : opp;
+  return {mode:'more', key:`m${a}${b}${opp}`, a, b, opp, ans, text:'Which team has more players?', say:'Which team has more players?',
     win:`Goal! The ${teamName(ans)} team has more!`};
 }
 function options(ans, hi){
@@ -604,7 +692,7 @@ function next(){
 
   if (q.mode === 'more'){
     const grp = (team, n) => `<button class="grp" data-v="${team}" aria-label="${teamName(team)} team">${Array.from({length:n}, () => shirt(team)).join('')}</button>`;
-    stage.innerHTML = `<div class="groups">${grp(S.team, q.a)}${grp(other(S.team), q.b)}</div>`;
+    stage.innerHTML = `<div class="groups">${grp(S.team, q.a)}${grp(q.opp, q.b)}</div>`;
     numeric = counting = false;
   } else if (q.mode === 'bigger'){
     stage.innerHTML = `<div class="groups">${q.pickFrom.map(v => `<button class="grp" data-v="${v}"><span class="num">${v}</span></button>`).join('')}</div>`;
@@ -732,6 +820,160 @@ function usePrize(after){
   S.prizes--; save();
   Pong.start(after);
 }
+
+/* ---------- word banks ---------- */
+const WORDS3 = [
+  {w:'cat', e:'🐱'}, {w:'dog', e:'🐶'}, {w:'sun', e:'☀️'}, {w:'hat', e:'🎩'}, {w:'pig', e:'🐷'},
+  {w:'fox', e:'🦊'}, {w:'owl', e:'🦉'}, {w:'ant', e:'🐜'}, {w:'cow', e:'🐮'}, {w:'bee', e:'🐝'},
+  {w:'egg', e:'🥚'}, {w:'bus', e:'🚌'}, {w:'bed', e:'🛏️'}, {w:'box', e:'📦'}
+];
+const WORDS4 = [
+  {w:'frog', e:'🐸'}, {w:'fish', e:'🐟'}, {w:'lion', e:'🦁'}, {w:'bird', e:'🐦'}, {w:'star', e:'⭐'},
+  {w:'moon', e:'🌙'}, {w:'book', e:'📖'}, {w:'cake', e:'🎂'}, {w:'duck', e:'🦆'}, {w:'crab', e:'🦀'},
+  {w:'kite', e:'🪁'}, {w:'leaf', e:'🍃'}, {w:'tree', e:'🌳'}, {w:'boat', e:'⛵'}
+];
+const WORDS5 = [
+  {w:'horse', e:'🐴'}, {w:'sheep', e:'🐑'}, {w:'zebra', e:'🦓'}, {w:'snake', e:'🐍'}, {w:'shark', e:'🦈'},
+  {w:'mouse', e:'🐭'}, {w:'whale', e:'🐳'}, {w:'apple', e:'🍎'}, {w:'grape', e:'🍇'}, {w:'clock', e:'🕐'},
+  {w:'chair', e:'🪑'}, {w:'plane', e:'✈️'}
+];
+const WORD_ROUND = 8;
+
+/* ---------- reading game ---------- */
+const READ_WORDS = [...WORDS3, ...WORDS4];
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null;
+if (SR) {
+  try { recognizer = new SR(); recognizer.lang = 'en-GB'; recognizer.interimResults = false; recognizer.maxAlternatives = 3; }
+  catch(e) { recognizer = null; }
+}
+const RD = { count:0, word:null, lastWord:null, listening:false };
+
+function readSlots(){
+  $('#readSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < RD.count ? ' on' : ''}">${i < RD.count ? '📖' : ''}</span>`).join('');
+  $('#readSlots').setAttribute('aria-label', `${RD.count} of ${WORD_ROUND} words read`);
+}
+function readStart(){
+  if (S.locked) return;
+  RD.count = 0; RD.lastWord = null;
+  readSlots(); show('reading'); readNext();
+}
+function readNext(){
+  let w; do { w = pick(READ_WORDS); } while (w.w === RD.lastWord && READ_WORDS.length > 1);
+  RD.lastWord = w.w; RD.word = w;
+  $('#readWord').textContent = w.w; $('#readWord').classList.remove('miss');
+  $('#micStatus').hidden = true; $('#micStatus').textContent = '';
+  $('#readMic').hidden = !recognizer; $('#readMic').classList.remove('held');
+  $('#readAskGrownup').hidden = !recognizer;
+  $('#readJudge').hidden = !!recognizer;
+}
+function readMark(correct){
+  if (correct){
+    RD.count++; readSlots(); cheer();
+    speak(RD.word.w);
+    if (RD.count >= WORD_ROUND) { setTimeout(() => wordEnd('reading', `You read ${RD.count} words. Brilliant reading!`, readStart), 700); return; }
+    setTimeout(readNext, 900);
+  } else {
+    speak('Have another go.');
+    $('#readWord').classList.remove('miss'); void $('#readWord').offsetWidth; $('#readWord').classList.add('miss');
+  }
+}
+$('#readRight').onclick = () => readMark(true);
+$('#readAgain').onclick = () => readMark(false);
+$('#readAskGrownup').onclick = () => { $('#readJudge').hidden = false; $('#readAskGrownup').hidden = true; };
+$('#readingHome').onclick = () => { hush(); if (recognizer) try { recognizer.abort(); } catch(e) {} show('category'); };
+if (recognizer){
+  recognizer.onresult = e => {
+    const said = [...e.results[0]].map(r => r.transcript.toLowerCase().trim());
+    $('#micStatus').hidden = false;
+    if (said.some(s => s === RD.word.w)){ $('#micStatus').textContent = `I heard "${said[0]}" — well done!`; readMark(true); }
+    else $('#micStatus').textContent = `I heard "${said[0]}" — hold the mic and try again.`;
+  };
+  recognizer.onerror = e => {
+    RD.listening = false; $('#readMic').classList.remove('held');
+    $('#micStatus').hidden = false;
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      $('#micStatus').textContent = "Microphone isn't available — ask a grown-up to check instead.";
+      $('#readJudge').hidden = false; $('#readAskGrownup').hidden = true;
+    } else if (e.error !== 'no-speech' && e.error !== 'aborted'){
+      $('#micStatus').textContent = "Didn't catch that — hold the mic and try again.";
+    } else {
+      $('#micStatus').hidden = true;
+    }
+  };
+  recognizer.onend = () => { RD.listening = false; $('#readMic').classList.remove('held'); };
+  const micDown = e => {
+    e.preventDefault();
+    if (RD.listening) return;
+    RD.listening = true; $('#readMic').classList.add('held');
+    $('#micStatus').hidden = false; $('#micStatus').textContent = 'Listening…';
+    try { $('#readMic').setPointerCapture(e.pointerId); } catch(err) {}
+    try { recognizer.start(); } catch(err) { RD.listening = false; $('#readMic').classList.remove('held'); }
+  };
+  const micUp = () => { if (RD.listening) try { recognizer.stop(); } catch(e) {} };
+  $('#readMic').addEventListener('pointerdown', micDown);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev => $('#readMic').addEventListener(ev, micUp));
+  $('#readMic').addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* ---------- writing game ---------- */
+const WRITE_WORDS = [...WORDS3, ...WORDS4, ...WORDS5];
+const WR = { count:0, word:null, lastWord:null };
+const wc = $('#wc'), wg = wc.getContext('2d');
+let wDrawing = false, wLastX = 0, wLastY = 0;
+function wDims(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), rect = wc.getBoundingClientRect();
+  wc.width = rect.width * dpr; wc.height = rect.height * dpr;
+  wg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  wg.lineWidth = 8; wg.lineCap = 'round'; wg.lineJoin = 'round'; wg.strokeStyle = '#12301a';
+}
+function wClear(){ wg.clearRect(0, 0, wc.width, wc.height); }
+wc.addEventListener('pointerdown', e => {
+  wDrawing = true; const r = wc.getBoundingClientRect();
+  wLastX = e.clientX - r.left; wLastY = e.clientY - r.top;
+  try { wc.setPointerCapture(e.pointerId); } catch(err) {}
+});
+wc.addEventListener('pointermove', e => {
+  if (!wDrawing) return;
+  const r = wc.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  wg.beginPath(); wg.moveTo(wLastX, wLastY); wg.lineTo(x, y); wg.stroke();
+  wLastX = x; wLastY = y;
+});
+['pointerup','pointercancel'].forEach(ev => wc.addEventListener(ev, () => wDrawing = false));
+addEventListener('resize', () => { if (!$('#writing').hidden) wDims(); });
+
+function writeSlots(){
+  $('#writeSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < WR.count ? ' on' : ''}">${i < WR.count ? '✏️' : ''}</span>`).join('');
+  $('#writeSlots').setAttribute('aria-label', `${WR.count} of ${WORD_ROUND} words written`);
+}
+function writeStart(){
+  if (S.locked) return;
+  WR.count = 0; WR.lastWord = null;
+  writeSlots(); show('writing'); wDims(); writeNext();
+}
+function writeNext(){
+  let w; do { w = pick(WRITE_WORDS); } while (w.w === WR.lastWord && WRITE_WORDS.length > 1);
+  WR.lastWord = w.w; WR.word = w;
+  $('#writePic').textContent = w.e;
+  $('#writeWord').textContent = w.w; $('#writeWord').hidden = true;
+  wClear();
+}
+function writeMark(correct){
+  if (correct){
+    WR.count++; writeSlots(); cheer();
+    speak(WR.word.w);
+    if (WR.count >= WORD_ROUND) { setTimeout(() => wordEnd('writing', `You wrote ${WR.count} words. Brilliant writing!`, writeStart), 700); return; }
+    setTimeout(writeNext, 900);
+  } else {
+    speak('Have another go.');
+    wClear();
+  }
+}
+$('#writeHint').onclick = () => { $('#writeWord').hidden = !$('#writeWord').hidden; };
+$('#writeClear').onclick = wClear;
+$('#writeRight').onclick = () => writeMark(true);
+$('#writeAgain').onclick = () => writeMark(false);
+$('#writingHome').onclick = () => { hush(); show('category'); };
 
 /* ---------- prize match: two-player football ---------- */
 const Pong = (() => {
@@ -877,14 +1119,15 @@ const Pong = (() => {
   }
   function drawPad(p){
     const w = padWEff, x = p.x - w/2, y = p.y - padH/2;
+    const st = STRIPED[p.team];
     g.save(); rr(x, y, w, padH, padH/2); g.clip();
-    if (p.team === 'red'){ g.fillStyle = '#fff'; g.fillRect(x, y, w, padH); g.fillStyle = '#d4152b'; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, padH); }
+    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, padH); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, padH); }
     else {
       g.fillStyle = TEAMS[p.team].main; g.fillRect(x, y, w, padH);
-      if (p.team === 'claret'){ g.fillStyle = TEAMS.claret.trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
+      if (SLEEVED.includes(p.team)){ g.fillStyle = TEAMS[p.team].trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
     }
     g.restore();
-    rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = p.team === 'red' ? '#8f0d1c' : TEAMS[p.team].trim; g.stroke();
+    rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[p.team].trim; g.stroke();
   }
   function drawScore(side, value){
     g.save();
@@ -969,6 +1212,7 @@ function lockSession(){
   if (S.locked) return;
   S.locked = true; S.token++; hush();
   try { Pong.freeze(); } catch(e) {}
+  if (recognizer) try { recognizer.abort(); } catch(e) {}
   const el = $('#timeout'); el.hidden = false; el.focus();
 }
 setTimeout(lockSession, SESSION_LIMIT_MS);
