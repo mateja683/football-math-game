@@ -1115,7 +1115,7 @@ const Pong = (() => {
     rowGap = W / 3.2; rowW = padW * .34; rowWEff = rowW;
     goalW = W * .46; r = Math.max(12, Math.min(24, Math.min(W, H) * .035));
     pads.top.y = H * .1; pads.bot.y = H * .9;
-    pads.top.oy = H * .31; pads.bot.oy = H * .69;
+    pads.top.oy = H * .70; pads.bot.oy = H * .30; // strikers play in the opposition half
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
   }
   const base = () => H * .36, maxSpeed = () => H * 1.05;
@@ -1149,7 +1149,7 @@ const Pong = (() => {
     pads.top.x = pads.bot.x = W/2;
     syncControls();
     const how = S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger';
-    const who = variant === 'foosball' ? 'your team' : 'your keeper';
+    const who = variant === 'foosball' ? 'your keeper and your strikers' : 'your keeper';
     const title = variant === 'foosball' ? 'Foosball' : 'Prize match';
     speak(`${title}! ${how} to move ${who}. First to three goals wins!`);
     say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}. First to ${WIN} wins!</p>`);
@@ -1201,21 +1201,22 @@ const Pong = (() => {
     ball.vx = speed * Math.sin(a); ball.vy = dir * speed * Math.cos(a);
     thud();
   }
-  // Outfield rods only block shots heading at their own goal, so a rod can never turn the ball into an own goal.
+  // Strikers always knock the ball towards the goal they're attacking, whichever way it arrived,
+  // so a rod is useful going forward and can never turn the ball into an own goal.
   function rods(){
     for (const side of ['bot','top']){
-      const p = pads[side], dir = side === 'bot' ? -1 : 1;
-      if (side === 'bot' ? ball.vy <= 0 : ball.vy >= 0) continue;
+      const p = pads[side], dir = side === 'bot' ? -1 : 1; // dir points away from that side's own goal
       if (!(ball.y + r >= p.oy - padH/2 && ball.y - r <= p.oy + padH/2)) continue;
       for (let k = -1; k <= 1; k++){
         const bx = p.x + k * rowGap;
         if (Math.abs(ball.x - bx) <= rowWEff/2 + r){
-          ball.y = p.oy + dir * (padH/2 + r); // dir points away from that side's goal
+          ball.y = p.oy + dir * (padH/2 + r);
           hit(bx, rowWEff, dir);
-          return;
+          return true;
         }
       }
     }
+    return false;
   }
   function update(dt){
     const scale = Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
@@ -1230,13 +1231,12 @@ const Pong = (() => {
     if (ball.x < r){ ball.x = r; ball.vx = Math.abs(ball.vx); }
     if (ball.x > W - r){ ball.x = W - r; ball.vx = -Math.abs(ball.vx); }
 
-    if (variant === 'foosball') rods();
-
+    const rodHit = variant === 'foosball' ? rods() : false; // one bar per frame, so a rod and a keeper can't both fire
     const b = pads.bot, t = pads.top;
-    if (ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
+    if (!rodHit && ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
       ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1);
     }
-    if (ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padWEff/2 + r){
+    if (!rodHit && ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padWEff/2 + r){
       ball.y = t.y + padH/2 + r; hit(t.x, padWEff, 1);
     }
     const inMouth = Math.abs(ball.x - W/2) < goalW/2 - r * .3;
@@ -1263,20 +1263,46 @@ const Pong = (() => {
     g.stroke();
   }
   function drawPad(p){ drawBar(p.team, p.x, p.y, padWEff); }
-  function drawRods(p){
-    for (let k = -1; k <= 1; k++) drawBar(p.team, p.x + k * rowGap, p.oy, rowWEff);
+  function kitFill(team, x, y, w, h){
+    const st = STRIPED[team];
+    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, h); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h); }
+    else {
+      g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, h);
+      if (SLEEVED.includes(team)){ g.fillStyle = TEAMS[team].trim; g.fillRect(x, y, w * .18, h); g.fillRect(x + w * .82, y, w * .18, h); }
+    }
   }
   function drawBar(team, cx, cy, w){
-    const x = cx - w/2, y = cy - padH/2;
-    const st = STRIPED[team];
-    g.save(); rr(x, y, w, padH, padH/2); g.clip();
-    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, padH); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, padH); }
-    else {
-      g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, padH);
-      if (SLEEVED.includes(team)){ g.fillStyle = TEAMS[team].trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
-    }
-    g.restore();
+    const x = cx - w/2, y = cy - padH/2, st = STRIPED[team];
+    g.save(); rr(x, y, w, padH, padH/2); g.clip(); kitFill(team, x, y, w, padH); g.restore();
     rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
+  }
+  /* ----- table-football look: metal rods with moulded figures bolted to them ----- */
+  function drawRod(y){
+    g.strokeStyle = 'rgba(206,212,222,.85)'; g.lineWidth = Math.max(4, padH * .30);
+    g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = Math.max(1, padH * .10);
+    g.beginPath(); g.moveTo(0, y - padH * .09); g.lineTo(W, y - padH * .09); g.stroke();
+    g.fillStyle = 'rgba(18,48,26,.85)';
+    [0, W].forEach(x => { g.beginPath(); g.arc(x, y, padH * .45, 0, Math.PI * 2); g.fill(); });
+  }
+  function figure(team, cx, cy, w, keeper){
+    const st = STRIPED[team], outline = st ? st.dark : TEAMS[team].trim;
+    const bodyW = keeper ? Math.min(w, padH * 2.4) : w;
+    const bodyH = padH * 1.7, headR = padH * .5, by = cy - bodyH * .30;
+    if (keeper){ // outstretched arms, as wide as the keeper actually blocks
+      const ah = padH * .62, ax = cx - w/2, ay = cy - ah/2;
+      g.save(); rr(ax, ay, w, ah, ah/2); g.clip(); kitFill(team, ax, ay, w, ah); g.restore();
+      rr(ax, ay, w, ah, ah/2); g.lineWidth = 3; g.strokeStyle = outline; g.stroke();
+    }
+    const bx = cx - bodyW/2, rad = Math.min(bodyW, bodyH) * .35;
+    g.save(); rr(bx, by, bodyW, bodyH, rad); g.clip(); kitFill(team, bx, by, bodyW, bodyH); g.restore();
+    rr(bx, by, bodyW, bodyH, rad); g.lineWidth = 3; g.strokeStyle = outline; g.stroke();
+    g.beginPath(); g.arc(cx, by - headR * .85, headR, 0, Math.PI * 2);
+    g.fillStyle = st ? st.accent : TEAMS[team].trim; g.fill();
+    g.lineWidth = 3; g.strokeStyle = 'rgba(18,48,26,.6)'; g.stroke();
+  }
+  function drawStrikers(p){
+    for (let k = -1; k <= 1; k++) figure(p.team, p.x + k * rowGap, p.oy, rowWEff, false);
   }
   function drawScore(side, value){
     g.save();
@@ -1301,8 +1327,14 @@ const Pong = (() => {
     const bw = Math.min(W - 20, goalW * 1.7), bh = H * .13;
     g.strokeRect(W/2 - bw/2, 0, bw, bh); g.strokeRect(W/2 - bw/2, H - bh, bw, bh);
     drawGoal(true); drawGoal(false);
-    drawPad(pads.top); drawPad(pads.bot);
-    if (variant === 'foosball'){ drawRods(pads.top); drawRods(pads.bot); }
+    if (variant === 'foosball'){
+      [pads.top.oy, pads.bot.oy, pads.top.y, pads.bot.y].forEach(drawRod);
+      drawStrikers(pads.top); drawStrikers(pads.bot);
+      figure(pads.top.team, pads.top.x, pads.top.y, padWEff, true);
+      figure(pads.bot.team, pads.bot.x, pads.bot.y, padWEff, true);
+    } else {
+      drawPad(pads.top); drawPad(pads.bot);
+    }
     drawScore('top', score.top); drawScore('bot', score.bot);
     g.save(); g.translate(ball.x, ball.y); g.rotate(ball.spin);
     g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
@@ -1464,13 +1496,14 @@ const Mini = (() => {
     $('#mexitNo').onclick = () => { confirming = false; running = true; say(''); };
   }
   const at = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  const handler = name => running && game && typeof game[name] === 'function' ? game[name].bind(game) : null;
   cv.addEventListener('pointerdown', e => {
-    if (!running || !game || !game.down) return;
-    audio(); const p = at(e); game.down(p.x, p.y);
+    const fn = handler('down'); if (!fn) return;
+    audio(); const p = at(e); fn(p.x, p.y);
     try { cv.setPointerCapture(e.pointerId); } catch(err) {}
   });
-  cv.addEventListener('pointermove', e => { if (running && game && game.move){ const p = at(e); game.move(p.x, p.y); } });
-  ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, e => { if (running && game && game.up){ const p = at(e); game.up(p.x, p.y); } }));
+  cv.addEventListener('pointermove', e => { const fn = handler('move'); if (fn){ const p = at(e); fn(p.x, p.y); } });
+  ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, e => { const fn = handler('up'); if (fn){ const p = at(e); fn(p.x, p.y); } }));
   addEventListener('resize', () => { if (!$('#mini').hidden){ dims(); if (game && game.resize) game.resize(W, H); } });
   $('#mexit').onclick = askExit;
   addEventListener('beforeunload', e => { if (!$('#mini').hidden){ e.preventDefault(); e.returnValue = ''; } });
@@ -1481,27 +1514,38 @@ const Mini = (() => {
 
 /* ---------- prize game: penalty shootout ---------- */
 const Penalty = {
-  title: 'Penalties', intro: 'Tap where you want to shoot!',
-  SHOTS: 5, SAVE_CHANCE: .32, FLY: .55,
+  title: 'Penalties', intro: 'Take turns — tap the goal you are shooting at!',
+  EACH: 3, SAVE_CHANCE: .32, FLY: .55,
   setup(W, H){
     this.W = W; this.H = H;
     this.r = Math.max(14, Math.min(26, Math.min(W, H) * .038));
-    this.goalW = W * .8; this.goalH = H * .18; this.goalX = (W - this.goalW) / 2; this.goalY = H * .07;
+    this.goalW = W * .8; this.goalX = (W - this.goalW) / 2; this.goalH = H * .17;
     this.kw = this.goalW * .26; this.kh = Math.max(16, H * .026);
-    this.ky = this.goalY + this.goalH - this.kh;
-    this.kx = W / 2; this.kFrom = W / 2; this.kTo = W / 2;
-    this.sx = W / 2; this.sy = H * .8; this.bx = this.sx; this.by = this.sy;
-    this.tx = W / 2; this.ty = this.goalY + this.goalH * .55;
-    this.keeper = other(S.team); // picked once — other() is random per call
-    this.shots = 0; this.goals = 0; this.results = []; this.phase = 'aim'; this.t = 0; this.flash = '';
+    this.topY = H * .06; this.botY = H * .94 - this.goalH;
+    this.teams = [S.team, other(S.team)]; // 0 shoots at the top goal, 1 at the bottom
+    this.scores = [0, 0]; this.results = [[], []];
+    this.turn = 0; this.shots = 0; this.flash = '';
+    this.setShot();
+  },
+  // Each player shoots at the far end, so both reach their own half of a shared screen.
+  setShot(){
+    const H = this.H;
+    this.shootUp = this.turn === 0;
+    this.goalY = this.shootUp ? this.topY : this.botY;
+    this.ky = this.shootUp ? this.goalY + this.goalH - this.kh / 2 : this.goalY + this.kh / 2;
+    this.kx = this.W / 2; this.kFrom = this.kx; this.kTo = this.kx;
+    this.sx = this.W / 2; this.sy = this.shootUp ? H * .68 : H * .32; // clear of both nets
+    this.bx = this.sx; this.by = this.sy;
+    this.tx = this.W / 2; this.ty = this.ky;
+    this.phase = 'aim'; this.t = 0;
   },
   resize(W, H){
-    const { shots, goals, results, keeper } = this;
-    this.setup(W, H);
-    this.shots = shots; this.goals = goals; this.results = results; this.keeper = keeper;
+    const keep = { scores: this.scores, results: this.results, turn: this.turn, shots: this.shots, teams: this.teams };
+    this.setup(W, H); Object.assign(this, keep); this.setShot();
   },
   down(x, y){
-    if (this.phase !== 'aim' || y > this.H * .66) return;
+    if (this.phase !== 'aim') return;
+    if (this.shootUp ? y > this.H * .6 : y < this.H * .4) return; // must tap the goal being shot at
     this.tx = Math.max(this.goalX + this.r, Math.min(this.goalX + this.goalW - this.r, x));
     this.kFrom = this.kx;
     this.kTo = Math.random() < this.SAVE_CHANCE
@@ -1515,42 +1559,57 @@ const Penalty = {
       this.t = Math.min(1, this.t + dt / this.FLY);
       const e = this.t;
       this.bx = this.sx + (this.tx - this.sx) * e;
-      this.by = this.sy + (this.ty - this.sy) * e - Math.sin(e * Math.PI) * this.H * .05;
+      this.by = this.sy + (this.ty - this.sy) * e + (this.shootUp ? -1 : 1) * Math.sin(e * Math.PI) * this.H * .04;
       this.kx = this.kFrom + (this.kTo - this.kFrom) * (1 - Math.pow(1 - e, 2));
       if (this.t >= 1){
         const saved = Math.abs(this.kx - this.bx) < this.kw / 2 + this.r * .8;
-        this.results.push(saved ? 'saved' : 'goal');
+        this.results[this.turn].push(saved ? 'saved' : 'goal');
         if (saved){ thud(); speak('Saved!'); this.flash = 'SAVED!'; }
-        else { this.goals++; cheer(); speak('Goal!'); this.flash = 'GOAL!'; }
+        else { this.scores[this.turn]++; cheer(); speak('Goal!'); this.flash = 'GOAL!'; }
         this.shots++; this.phase = 'result'; this.t = 0;
       }
     } else if (this.phase === 'result'){
       this.t += dt;
       if (this.t > 1.3){
         this.flash = '';
-        if (this.shots >= this.SHOTS){
-          Mini.finish(`${this.goals} out of ${this.SHOTS}!`, this.goals >= 3 ? 'Brilliant shooting!' : 'Good try — great shooting practice!');
-          this.phase = 'done';
-        } else {
-          this.bx = this.sx; this.by = this.sy; this.phase = 'aim';
-        }
+        if (this.shots >= this.EACH * 2){ this.done(); return; }
+        this.turn = 1 - this.turn; this.setShot();
+        speak(`${cap(teamName(this.teams[this.turn]))}, your turn!`);
       }
+    }
+  },
+  done(){
+    this.phase = 'over';
+    const [a, b] = this.scores;
+    const line = `${cap(teamName(this.teams[0]))} ${a}, ${cap(teamName(this.teams[1]))} ${b}.`;
+    if (a === b) Mini.finish('A draw!', `${line} Well played, both of you!`);
+    else {
+      const win = this.teams[a > b ? 0 : 1];
+      confetti(win);
+      Mini.finish(`${cap(teamName(win))} win!`, line);
     }
   },
   draw(){
     const W = this.W, H = this.H;
-    Mini.netGoal(this.goalX, this.goalY, this.goalW, this.goalH);
-    Mini.bar(this.keeper, this.kx, this.ky, this.kw, this.kh);
+    Mini.netGoal(this.goalX, this.topY, this.goalW, this.goalH);
+    Mini.netGoal(this.goalX, this.botY, this.goalW, this.goalH);
+    if (this.phase !== 'over') Mini.bar(this.teams[1 - this.turn], this.kx, this.ky, this.kw, this.kh);
+    [0, 1].forEach(pi => {
+      for (let i = 0; i < this.EACH; i++){
+        const res = this.results[pi][i];
+        Mini.dot(W / 2 - (this.EACH - 1) * 18 + i * 36, pi === 0 ? H * .58 : H * .42, 11,
+          res === 'goal' ? '#f5c400' : res === 'saved' ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.12)',
+          TEAMS[this.teams[pi]].trim);
+      }
+    });
     Mini.dot(W / 2, this.sy, this.r * .35, null, 'rgba(255,255,255,.5)');
-    for (let i = 0; i < this.SHOTS; i++){
-      const res = this.results[i];
-      Mini.dot(W / 2 - (this.SHOTS - 1) * 16 + i * 32, this.goalY + this.goalH + 26, 10,
-        res === 'goal' ? '#f5c400' : res === 'saved' ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.12)',
-        'rgba(255,255,255,.6)');
+    if (this.phase !== 'over') Mini.ballAt(this.bx, this.by, this.phase === 'fly' ? this.r * (1 - .3 * this.t) : this.r);
+    if (this.phase === 'aim'){
+      // whose turn, said in kit colours rather than words
+      Mini.bar(this.teams[this.turn], W / 2, this.sy + (this.shootUp ? 1 : -1) * this.r * 2.0, this.r * 3.4, this.kh);
+      Mini.text('Tap the goal!', W / 2, H * .5, Math.min(30, W * .075));
     }
-    if (this.phase !== 'done') Mini.ballAt(this.bx, this.by, this.phase === 'fly' ? this.r * (1 - .3 * this.t) : this.r);
     if (this.flash) Mini.text(this.flash, W / 2, H * .5, Math.min(72, W * .17), this.flash === 'GOAL!' ? '#f5c400' : '#fff');
-    if (this.phase === 'aim') Mini.text('Tap to shoot', W / 2, H * .68, Math.min(30, W * .07));
   }
 };
 
