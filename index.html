@@ -194,6 +194,14 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   display:flex;flex-direction:column;align-items:center;gap:8px;font-size:19px;font-weight:700;line-height:1.15;text-align:center}
 .pickcard:active{transform:translateY(3px)}
 .pickcard .ico{font-size:46px;line-height:1}
+.picklabel{font-size:20px;font-weight:700;opacity:.9;margin:2px 0 0}
+/* the prize screen carries a score, a cheer and the picker, so everything on it runs a size smaller */
+#prize .trophy{font-size:72px;margin-top:8px}
+#prize h1{font-size:clamp(32px,8.5vw,50px)}
+#prize p{font-size:21px;margin:0}
+#prize .pickgrid{margin-top:8px;gap:10px}
+#prize .pickcard{padding:12px 8px;font-size:17px}
+#prize .pickcard .ico{font-size:36px}
 .shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
 .tcard{background:var(--glass);border-radius:20px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;
   font-size:15px;font-weight:700;line-height:1.15;text-align:center;position:relative}
@@ -395,7 +403,8 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <div class="trophy">🏆</div>
   <h1 id="prizeTitle">Great scoring!</h1>
   <p id="prizeMsg">You won the prize match.</p>
-  <button class="big" id="prizeNow">Play the prize match</button>
+  <p class="picklabel">Pick your game</p>
+  <div class="pickgrid" id="prizePick"></div>
   <button class="plain" id="prizeLater">Save it for later</button>
 </main>
 
@@ -867,10 +876,10 @@ function fullTime(hits){
 
 /* ---------- prize ---------- */
 function prizeUnlocked(hits, total, resume){
-  $('#prizeMsg').textContent = `${hits} out of ${total} right first time! You won the prize match.`;
+  $('#prizeMsg').textContent = `${hits} out of ${total} right first time! You won a prize game.`;
+  renderPicks($('#prizePick'), resume, true);
   show('prize'); confetti(S.team);
-  speak(`${hits} out of ${total}! You won the prize match!`);
-  $('#prizeNow').onclick = () => usePrize(resume);
+  speak(`${hits} out of ${total}! You won a prize game! Pick the one you want.`);
   $('#prizeLater').onclick = resume;
 }
 /* ---------- prize game picker ---------- */
@@ -882,12 +891,19 @@ const PRIZE_GAMES = [
   {key:'scramble', ico:'🧹', name:'Scramble',   go: after => Mini.start(Scramble, after, 'scramble')}
 ];
 let pickerAfter = null, pickerSpend = true;
+// Used both on the picker screen and inline on the prize screen, so a won prize is one tap from playing.
+function renderPicks(host, after, spend){
+  host.innerHTML = PRIZE_GAMES.map((gm, i) =>
+    `<button class="pickcard" data-i="${i}"><span class="ico">${gm.ico}</span>${gm.name}</button>`).join('');
+  host.querySelectorAll('.pickcard').forEach(b => b.onclick = () => {
+    pickerAfter = after; pickerSpend = spend;
+    playPrizeGame(PRIZE_GAMES[+b.dataset.i]);
+  });
+}
 function openPicker(after, spend){
   if (S.locked) return;
   pickerAfter = after; pickerSpend = spend;
-  $('#pickGrid').innerHTML = PRIZE_GAMES.map((gm, i) =>
-    `<button class="pickcard" data-i="${i}"><span class="ico">${gm.ico}</span>${gm.name}</button>`).join('');
-  $$('#pickGrid .pickcard').forEach(b => b.onclick = () => playPrizeGame(PRIZE_GAMES[+b.dataset.i]));
+  renderPicks($('#pickGrid'), after, spend);
   show('picker');
 }
 function usePrize(after){
