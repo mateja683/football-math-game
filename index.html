@@ -320,8 +320,10 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 <main class="app end" id="wordEnd" hidden>
   <div class="trophy">🏆</div>
   <h1 id="wordEndTitle">Well done!</h1>
+  <div class="row5" id="wordEndScore">8/8</div>
   <p id="wordEndMsg"></p>
   <button class="big" id="wordEndAgain">Play again</button>
+  <button class="prizebtn" id="wordPrize" hidden>🏆 Play the prize match</button>
   <button class="plain" id="wordEndBack">Back to categories</button>
 </main>
 
@@ -404,7 +406,8 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ROUND_LEN = 10;
-const PRIZE_THRESHOLD = 9;
+const PRIZE_THRESHOLD = ROUND_LEN - 1;
+const prizeEarned = (hits, total) => hits >= total - 1; // perfect, or perfect but one
 const MAX_NUM = 20;
 const ALL_MODES = ['count','add','take','more','next','make','flash','bigger'];
 const SESSION_LIMIT_MS = 20 * 60 * 1000;
@@ -529,6 +532,7 @@ function show(id){
   ['category','start','play','end','prize','gate','reading','writing','wordEnd'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#prizeEnd').hidden = S.prizes < 1;
+  $('#wordPrize').hidden = S.prizes < 1;
   window.scrollTo(0,0);
 }
 function confetti(team){
@@ -548,9 +552,19 @@ $('#goWriting').onclick = () => writeStart();
 $('#toCategory').onclick = () => show('category');
 $('#wordEndAgain').onclick = () => wordEndReplay && wordEndReplay();
 $('#wordEndBack').onclick = () => show('category');
-function wordEnd(kind, msg, replay){
-  $('#wordEndTitle').textContent = kind === 'reading' ? 'Well read!' : 'Well written!';
-  $('#wordEndMsg').textContent = msg;
+$('#wordPrize').onclick = () => usePrize(() => show('wordEnd'));
+function wordRoundDone(kind, hits, replay){
+  const done = () => wordEnd(kind, hits, replay);
+  if (prizeEarned(hits, WORD_ROUND)){ S.prizes++; save(); prizeUnlocked(hits, WORD_ROUND, done); }
+  else done();
+}
+function wordEnd(kind, hits, replay){
+  const reading = kind === 'reading';
+  $('#wordEndTitle').textContent = reading ? 'Well read!' : 'Well written!';
+  $('#wordEndScore').textContent = `${hits}/${WORD_ROUND}`;
+  $('#wordEndMsg').textContent = prizeEarned(hits, WORD_ROUND)
+    ? (reading ? 'Brilliant reading!' : 'Brilliant writing!')
+    : `${hits} out of ${WORD_ROUND} right first time. Great effort!`;
   wordEndReplay = replay;
   show('wordEnd');
   whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
@@ -795,12 +809,12 @@ function goal(el){
 
 function endOfRound(){
   const hits = S.streak;
-  if (hits >= PRIZE_THRESHOLD){ S.prizes++; save(); prizeUnlocked(hits, () => fullTime(hits)); }
+  if (prizeEarned(hits, ROUND_LEN)){ S.prizes++; save(); prizeUnlocked(hits, ROUND_LEN, () => fullTime(hits)); }
   else fullTime(hits);
 }
 function fullTime(hits){
   $('#endScore').textContent = `${hits}/${ROUND_LEN}`;
-  $('#endMsg').textContent = hits >= PRIZE_THRESHOLD ? 'Brilliant playing!' : `${hits} out of ${ROUND_LEN} right first time. Great effort!`;
+  $('#endMsg').textContent = prizeEarned(hits, ROUND_LEN) ? 'Brilliant playing!' : `${hits} out of ${ROUND_LEN} right first time. Great effort!`;
   show('end');
   whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
   setTimeout(() => speak(`Full time! You got ${hits} out of ${ROUND_LEN} right first time. Brilliant playing!`), 300);
@@ -808,10 +822,10 @@ function fullTime(hits){
 }
 
 /* ---------- prize ---------- */
-function prizeUnlocked(hits, resume){
-  $('#prizeMsg').textContent = `${hits} out of ${ROUND_LEN} right first time! You won the prize match.`;
+function prizeUnlocked(hits, total, resume){
+  $('#prizeMsg').textContent = `${hits} out of ${total} right first time! You won the prize match.`;
   show('prize'); confetti(S.team);
-  speak(`${hits} out of ${ROUND_LEN}! You won the prize match!`);
+  speak(`${hits} out of ${total}! You won the prize match!`);
   $('#prizeNow').onclick = () => usePrize(resume);
   $('#prizeLater').onclick = resume;
 }
@@ -847,7 +861,7 @@ if (SR) {
   try { recognizer = new SR(); recognizer.lang = 'en-GB'; recognizer.interimResults = false; recognizer.maxAlternatives = 3; }
   catch(e) { recognizer = null; }
 }
-const RD = { count:0, word:null, lastWord:null, listening:false };
+const RD = { count:0, hits:0, missed:false, word:null, lastWord:null, listening:false };
 
 function readSlots(){
   $('#readSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < RD.count ? ' on' : ''}">${i < RD.count ? '📖' : ''}</span>`).join('');
@@ -855,12 +869,12 @@ function readSlots(){
 }
 function readStart(){
   if (S.locked) return;
-  RD.count = 0; RD.lastWord = null;
+  RD.count = 0; RD.hits = 0; RD.lastWord = null;
   readSlots(); show('reading'); readNext();
 }
 function readNext(){
   let w; do { w = pick(READ_WORDS); } while (w.w === RD.lastWord && READ_WORDS.length > 1);
-  RD.lastWord = w.w; RD.word = w;
+  RD.lastWord = w.w; RD.word = w; RD.missed = false;
   $('#readWord').textContent = w.w; $('#readWord').classList.remove('miss');
   $('#micStatus').hidden = true; $('#micStatus').textContent = '';
   $('#readMic').hidden = !recognizer; $('#readMic').classList.remove('held');
@@ -869,11 +883,13 @@ function readNext(){
 }
 function readMark(correct){
   if (correct){
-    RD.count++; readSlots(); cheer();
+    RD.count++; if (!RD.missed) RD.hits++;
+    readSlots(); cheer();
     speak(RD.word.w);
-    if (RD.count >= WORD_ROUND) { setTimeout(() => wordEnd('reading', `You read ${RD.count} words. Brilliant reading!`, readStart), 700); return; }
+    if (RD.count >= WORD_ROUND) { setTimeout(() => wordRoundDone('reading', RD.hits, readStart), 700); return; }
     setTimeout(readNext, 900);
   } else {
+    RD.missed = true;
     speak('Have another go.');
     $('#readWord').classList.remove('miss'); void $('#readWord').offsetWidth; $('#readWord').classList.add('miss');
   }
@@ -918,7 +934,7 @@ if (recognizer){
 
 /* ---------- writing game ---------- */
 const WRITE_WORDS = [...WORDS3, ...WORDS4, ...WORDS5];
-const WR = { count:0, word:null, lastWord:null };
+const WR = { count:0, hits:0, missed:false, word:null, lastWord:null };
 const wc = $('#wc'), wg = wc.getContext('2d');
 let wDrawing = false, wLastX = 0, wLastY = 0;
 function wDims(){
@@ -948,23 +964,25 @@ function writeSlots(){
 }
 function writeStart(){
   if (S.locked) return;
-  WR.count = 0; WR.lastWord = null;
+  WR.count = 0; WR.hits = 0; WR.lastWord = null;
   writeSlots(); show('writing'); wDims(); writeNext();
 }
 function writeNext(){
   let w; do { w = pick(WRITE_WORDS); } while (w.w === WR.lastWord && WRITE_WORDS.length > 1);
-  WR.lastWord = w.w; WR.word = w;
+  WR.lastWord = w.w; WR.word = w; WR.missed = false;
   $('#writePic').textContent = w.e;
   $('#writeWord').textContent = w.w; $('#writeWord').hidden = true;
   wClear();
 }
 function writeMark(correct){
   if (correct){
-    WR.count++; writeSlots(); cheer();
+    WR.count++; if (!WR.missed) WR.hits++;
+    writeSlots(); cheer();
     speak(WR.word.w);
-    if (WR.count >= WORD_ROUND) { setTimeout(() => wordEnd('writing', `You wrote ${WR.count} words. Brilliant writing!`, writeStart), 700); return; }
+    if (WR.count >= WORD_ROUND) { setTimeout(() => wordRoundDone('writing', WR.hits, writeStart), 700); return; }
     setTimeout(writeNext, 900);
   } else {
+    WR.missed = true;
     speak('Have another go.');
     wClear();
   }
