@@ -162,12 +162,12 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 
 /* ---------- prize match ---------- */
-#pong{position:fixed;inset:0;z-index:20;background:var(--bg);touch-action:none;overscroll-behavior:none}
-#pc{display:block;width:100%;height:100%;touch-action:none}
-#pexit{position:absolute;left:10px;transform:translateY(-50%);background:rgba(0,0,0,.25)}
+#pong,#mini{position:fixed;inset:0;z-index:20;background:var(--bg);touch-action:none;overscroll-behavior:none}
+#pc,#mc{display:block;width:100%;height:100%;touch-action:none}
+#pexit,#mexit{position:absolute;left:10px;transform:translateY(-50%);background:rgba(0,0,0,.25)}
 #pmode{transform:translateY(-50%)}
 #pmode{position:absolute;left:10px;top:calc(50% + 34px);background:rgba(0,0,0,.25)}
-#pexit{top:calc(50% - 34px)}
+#pexit,#mexit{top:calc(50% - 34px)}
 .pbtn{position:absolute;width:clamp(76px,22vw,104px);height:clamp(76px,22vw,104px);border-radius:50%;font-size:clamp(38px,11vw,52px);
   color:#fff;border:4px solid rgba(255,255,255,.85);opacity:.82;touch-action:none;user-select:none;-webkit-user-select:none;
   display:grid;place-items:center;line-height:1;box-shadow:0 5px 0 rgba(0,0,0,.3)}
@@ -182,11 +182,25 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .pbtn.tr{top:max(12px,env(safe-area-inset-top));right:12px}
 .pbtn.bl{bottom:max(12px,env(safe-area-inset-bottom));left:12px}
 .pbtn.br{bottom:max(12px,env(safe-area-inset-bottom));right:12px}
-#pmsg{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;text-align:center}
-#pmsg .box{pointer-events:auto;background:rgba(18,48,26,.82);border-radius:26px;padding:20px 22px;max-width:min(90vw,420px)}
-#pmsg .say{font-size:clamp(40px,12vw,80px);font-weight:800;line-height:1;text-shadow:0 5px 0 rgba(0,0,0,.3)}
-#pmsg .small{font-size:22px;margin:8px 0 0}
-#pmsg .box .big,#pmsg .box .plain{margin-top:12px}
+#pmsg,#mmsg{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;text-align:center}
+#pmsg .box,#mmsg .box{pointer-events:auto;background:rgba(18,48,26,.82);border-radius:26px;padding:20px 22px;max-width:min(90vw,420px)}
+#pmsg .say,#mmsg .say{font-size:clamp(40px,12vw,80px);font-weight:800;line-height:1;text-shadow:0 5px 0 rgba(0,0,0,.3)}
+#pmsg .small,#mmsg .small{font-size:22px;margin:8px 0 0}
+#pmsg .box .big,#pmsg .box .plain,#mmsg .box .big,#mmsg .box .plain{margin-top:12px}
+
+/* ---------- prize picker / trophy cabinet ---------- */
+.pickgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.pickcard{background:var(--glass);border:3px solid transparent;border-radius:24px;padding:18px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;font-size:19px;font-weight:700;line-height:1.15;text-align:center}
+.pickcard:active{transform:translateY(3px)}
+.pickcard .ico{font-size:46px;line-height:1}
+.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+.tcard{background:var(--glass);border-radius:20px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:15px;font-weight:700;line-height:1.15;text-align:center;position:relative}
+.tcard .ico{font-size:40px;line-height:1}
+.tcard.empty{opacity:.32}
+.tcard b{position:absolute;top:6px;right:8px;background:var(--yellow);color:var(--ink);border-radius:999px;
+  min-width:26px;padding:0 6px;font-size:16px;line-height:26px}
 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition:none !important}
@@ -223,6 +237,25 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
     <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
   </div>
+  <div class="spacer"></div>
+  <button class="prizebtn" id="goCabinet">🏆 Trophy cabinet</button>
+</main>
+
+<!-- PRIZE GAME PICKER -->
+<main class="app" id="picker" hidden>
+  <h1 class="label" style="font-size:34px;text-align:center;margin-top:18px">Pick your prize game</h1>
+  <div class="pickgrid" id="pickGrid"></div>
+  <div class="spacer"></div>
+  <button class="plain" id="pickBack">Not just now</button>
+</main>
+
+<!-- TROPHY CABINET -->
+<main class="app" id="cabinet" hidden>
+  <div class="bar"><button class="iconbtn" id="cabinetBack" aria-label="Back">←</button></div>
+  <h1 class="label" style="font-size:34px;text-align:center">Trophy cabinet</h1>
+  <p class="micstatus" id="cabinetMsg"></p>
+  <div class="shelf" id="shelf"></div>
+  <div class="spacer"></div>
 </main>
 
 <!-- START -->
@@ -271,7 +304,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <div class="chips"><button class="chip" id="voice">Read questions out loud</button></div>
 
   <div class="spacer"></div>
-  <button class="prizebtn" id="pongStart">⚽ Two-player football</button>
+  <button class="prizebtn" id="pongStart">⚽ Prize games</button>
   <button class="kickoff" id="kickoff">Kick off</button>
 </main>
 
@@ -391,6 +424,13 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <button class="iconbtn" id="pmode" aria-label="Switch keeper controls">🎮</button>
 </div>
 
+<!-- TAP-BASED PRIZE GAMES -->
+<div id="mini" hidden>
+  <canvas id="mc" aria-label="Prize game"></canvas>
+  <div id="mmsg"></div>
+  <button class="iconbtn" id="mexit" aria-label="Leave the prize game">✕</button>
+</div>
+
 <div id="goaltext" hidden><span>GOAL!</span></div>
 <div id="confetti"></div>
 <div id="timeout" tabindex="-1" hidden>
@@ -422,9 +462,12 @@ const S = {
   streak: saved.streak || 0,
   prizes: saved.prizes || 0,
   controls: saved.controls === 'buttons' ? 'buttons' : 'slide',
+  trophies: saved.trophies && typeof saved.trophies === 'object' ? saved.trophies : {},
+  keepyBest: saved.keepyBest || 0,
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
+function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 const TEAMS = {
   blue:   {name:'blue and yellow',  main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
@@ -529,8 +572,9 @@ function thud(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['category','start','play','end','prize','gate','reading','writing','wordEnd'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
+  $('#mini').hidden = id !== 'mini';
   $('#prizeEnd').hidden = S.prizes < 1;
   $('#wordPrize').hidden = S.prizes < 1;
   window.scrollTo(0,0);
@@ -607,7 +651,7 @@ $('#change').onclick = () => { $('#confetti').innerHTML = ''; show('start'); };
 $('#home').onclick = () => { S.token++; hush(); show('start'); };
 $('#again').onclick = () => S.q && speak(S.q.say);
 $('#countbtn').onclick = () => S.q && S.q.mode === 'flash' ? peek() : countWithMe();
-$('#pongStart').onclick = () => parentGate(() => Pong.start(() => show('start')));
+$('#pongStart').onclick = () => parentGate(() => openPicker(() => show('start'), false));
 $('#prizeEnd').onclick = () => usePrize(() => show('end'));
 
 /* ---------- parent gate ---------- */
@@ -829,10 +873,50 @@ function prizeUnlocked(hits, total, resume){
   $('#prizeNow').onclick = () => usePrize(resume);
   $('#prizeLater').onclick = resume;
 }
+/* ---------- prize game picker ---------- */
+const PRIZE_GAMES = [
+  {key:'keepers',  ico:'🧤', name:'Keepers',    go: after => Pong.start(after, 'classic')},
+  {key:'foosball', ico:'🥅', name:'Foosball',   go: after => Pong.start(after, 'foosball')},
+  {key:'penalty',  ico:'⚽', name:'Penalties',  go: after => Mini.start(Penalty, after, 'penalty')},
+  {key:'keepy',    ico:'🤹', name:'Keepy-uppies', go: after => Mini.start(Keepy, after, 'keepy')},
+  {key:'scramble', ico:'🧹', name:'Scramble',   go: after => Mini.start(Scramble, after, 'scramble')}
+];
+let pickerAfter = null, pickerSpend = true;
+function openPicker(after, spend){
+  if (S.locked) return;
+  pickerAfter = after; pickerSpend = spend;
+  $('#pickGrid').innerHTML = PRIZE_GAMES.map((gm, i) =>
+    `<button class="pickcard" data-i="${i}"><span class="ico">${gm.ico}</span>${gm.name}</button>`).join('');
+  $$('#pickGrid .pickcard').forEach(b => b.onclick = () => playPrizeGame(PRIZE_GAMES[+b.dataset.i]));
+  show('picker');
+}
 function usePrize(after){
   if (S.prizes < 1) return;
-  S.prizes--; save();
-  Pong.start(after);
+  openPicker(after, true);
+}
+function playPrizeGame(gm){
+  if (pickerSpend){
+    if (S.prizes < 1) return;
+    S.prizes--; save();
+  }
+  const back = pickerAfter;
+  gm.go(() => back && back());
+}
+$('#pickBack').onclick = () => { const back = pickerAfter; pickerAfter = null; back ? back() : show('category'); };
+
+/* ---------- trophy cabinet ---------- */
+$('#goCabinet').onclick = () => showCabinet();
+$('#cabinetBack').onclick = () => show('category');
+function showCabinet(){
+  const total = PRIZE_GAMES.reduce((n, gm) => n + (S.trophies[gm.key] || 0), 0);
+  $('#cabinetMsg').textContent = total
+    ? `${total} ${total === 1 ? 'trophy' : 'trophies'} won so far!`
+    : 'Win a prize game to put your first trophy on the shelf.';
+  $('#shelf').innerHTML = PRIZE_GAMES.map(gm => {
+    const n = S.trophies[gm.key] || 0;
+    return `<div class="tcard${n ? '' : ' empty'}">${n > 1 ? `<b>${n}</b>` : ''}<span class="ico">${n ? '🏆' : gm.ico}</span>${gm.name}</div>`;
+  }).join('');
+  show('cabinet');
 }
 
 /* ---------- word banks ---------- */
@@ -999,7 +1083,8 @@ const Pong = (() => {
   let W, H, dpr, raf = 0, last = 0, state = 'idle', tok = 0, after = null, confirming = false;
   const WIN = 3;
   const MIN_PAD_SCALE = .5, SHRINK_PER_HIT = .09;
-  let fullSpeedStreak = 0;
+  let fullSpeedStreak = 0, variant = 'classic';
+  let rowGap = 0, rowW = 0, rowWEff = 0; // foosball outfield rods
   const pads = { top:{x:0, team:'red'}, bot:{x:0, team:'blue'} };
   const ball = {x:0, y:0, vx:0, vy:0, spin:0};
   const score = {top:0, bot:0};
@@ -1011,8 +1096,10 @@ const Pong = (() => {
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
     padW = Math.max(80, W * .28); padWEff = padW; padH = Math.max(16, H * .024);
+    rowGap = W / 3.2; rowW = padW * .34; rowWEff = rowW;
     goalW = W * .46; r = Math.max(12, Math.min(24, Math.min(W, H) * .035));
     pads.top.y = H * .1; pads.bot.y = H * .9;
+    pads.top.oy = H * .31; pads.bot.oy = H * .69;
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
   }
   const base = () => H * .36, maxSpeed = () => H * 1.05;
@@ -1036,16 +1123,20 @@ const Pong = (() => {
       if (s === 'Go!'){ whistle(0, .4); setTimeout(() => { if (t === tok) say(''); }, 500); serve(dir); state = 'play'; }
     }, 700 * i));
   }
-  function start(cb){
+  function start(cb, v){
     if (S.locked) return;
+    variant = v === 'foosball' ? 'foosball' : 'classic';
     after = cb; tok++; hush();
     pads.bot.team = S.team; pads.top.team = other(S.team);
     score.top = score.bot = 0;
     show('pong'); audio(); dims();
     pads.top.x = pads.bot.x = W/2;
     syncControls();
-    speak(`Prize match! ${S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger'} to move your keeper. First to three goals wins!`);
-    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">Prize match</div><p class="small">${S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger'} to move your keeper. First to ${WIN} wins!</p>`);
+    const how = S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger';
+    const who = variant === 'foosball' ? 'your team' : 'your keeper';
+    const title = variant === 'foosball' ? 'Foosball' : 'Prize match';
+    speak(`${title}! ${how} to move ${who}. First to three goals wins!`);
+    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}. First to ${WIN} wins!</p>`);
     const t = tok;
     setTimeout(() => { if (t === tok) countdown(Math.random() < .5 ? 1 : -1); }, 2600);
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
@@ -1072,6 +1163,7 @@ const Pong = (() => {
     const team = pads[side].team;
     if (score[side] >= WIN){
       state = 'over';
+      awardTrophy(variant === 'foosball' ? 'foosball' : 'keepers');
       whistle(.3, .3); whistle(.75, .3); whistle(1.2, .9);
       speak(`${cap(teamName(team))} win the prize match!`);
       confetti(team);
@@ -1085,16 +1177,33 @@ const Pong = (() => {
     const t = tok;
     setTimeout(() => { if (t === tok) countdown(side === 'top' ? 1 : -1); }, 1500); // serve towards the team that conceded
   }
-  function hit(pad, dir){
+  function hit(cx, w, dir){
     const speed = Math.min(maxSpeed(), Math.hypot(ball.vx, ball.vy) * 1.07);
     if (speed >= maxSpeed() - .5) fullSpeedStreak++;
-    const off = Math.max(-1, Math.min(1, (ball.x - pad.x) / (padWEff/2)));
+    const off = Math.max(-1, Math.min(1, (ball.x - cx) / (w/2)));
     const a = off * 1.0;
     ball.vx = speed * Math.sin(a); ball.vy = dir * speed * Math.cos(a);
     thud();
   }
+  // Outfield rods only block shots heading at their own goal, so a rod can never turn the ball into an own goal.
+  function rods(){
+    for (const side of ['bot','top']){
+      const p = pads[side], dir = side === 'bot' ? -1 : 1;
+      if (side === 'bot' ? ball.vy <= 0 : ball.vy >= 0) continue;
+      if (!(ball.y + r >= p.oy - padH/2 && ball.y - r <= p.oy + padH/2)) continue;
+      for (let k = -1; k <= 1; k++){
+        const bx = p.x + k * rowGap;
+        if (Math.abs(ball.x - bx) <= rowWEff/2 + r){
+          ball.y = p.oy + dir * (padH/2 + r); // dir points away from that side's goal
+          hit(bx, rowWEff, dir);
+          return;
+        }
+      }
+    }
+  }
   function update(dt){
-    padWEff = padW * Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
+    const scale = Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
+    padWEff = padW * scale; rowWEff = rowW * scale;
     const ks = W * (S.controls === 'buttons' ? 1.05 : 1.3) * dt;
     if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
     if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
@@ -1105,12 +1214,14 @@ const Pong = (() => {
     if (ball.x < r){ ball.x = r; ball.vx = Math.abs(ball.vx); }
     if (ball.x > W - r){ ball.x = W - r; ball.vx = -Math.abs(ball.vx); }
 
+    if (variant === 'foosball') rods();
+
     const b = pads.bot, t = pads.top;
     if (ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
-      ball.y = b.y - padH/2 - r; hit(b, -1);
+      ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1);
     }
     if (ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padWEff/2 + r){
-      ball.y = t.y + padH/2 + r; hit(t, 1);
+      ball.y = t.y + padH/2 + r; hit(t.x, padWEff, 1);
     }
     const inMouth = Math.abs(ball.x - W/2) < goalW/2 - r * .3;
     if (ball.y - r <= 0){ if (inMouth) return scored('bot'); ball.y = r; ball.vy = Math.abs(ball.vy); thud(); }
@@ -1135,17 +1246,21 @@ const Pong = (() => {
     g.moveTo(x, top ? 0 : H); g.lineTo(x, ly); g.lineTo(x + goalW, ly); g.lineTo(x + goalW, top ? 0 : H);
     g.stroke();
   }
-  function drawPad(p){
-    const w = padWEff, x = p.x - w/2, y = p.y - padH/2;
-    const st = STRIPED[p.team];
+  function drawPad(p){ drawBar(p.team, p.x, p.y, padWEff); }
+  function drawRods(p){
+    for (let k = -1; k <= 1; k++) drawBar(p.team, p.x + k * rowGap, p.oy, rowWEff);
+  }
+  function drawBar(team, cx, cy, w){
+    const x = cx - w/2, y = cy - padH/2;
+    const st = STRIPED[team];
     g.save(); rr(x, y, w, padH, padH/2); g.clip();
     if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, padH); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, padH); }
     else {
-      g.fillStyle = TEAMS[p.team].main; g.fillRect(x, y, w, padH);
-      if (SLEEVED.includes(p.team)){ g.fillStyle = TEAMS[p.team].trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
+      g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, padH);
+      if (SLEEVED.includes(team)){ g.fillStyle = TEAMS[team].trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
     }
     g.restore();
-    rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[p.team].trim; g.stroke();
+    rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
   }
   function drawScore(side, value){
     g.save();
@@ -1171,6 +1286,7 @@ const Pong = (() => {
     g.strokeRect(W/2 - bw/2, 0, bw, bh); g.strokeRect(W/2 - bw/2, H - bh, bw, bh);
     drawGoal(true); drawGoal(false);
     drawPad(pads.top); drawPad(pads.bot);
+    if (variant === 'foosball'){ drawRods(pads.top); drawRods(pads.bot); }
     drawScore('top', score.top); drawScore('bot', score.bot);
     g.save(); g.translate(ball.x, ball.y); g.rotate(ball.spin);
     g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
@@ -1225,11 +1341,293 @@ const Pong = (() => {
   return { start, freeze };
 })();
 
+/* ---------- shell for the tap-based prize games ---------- */
+const Mini = (() => {
+  const cv = $('#mc'), g = cv.getContext('2d'), msg = $('#mmsg');
+  let W, H, dpr, raf = 0, last = 0, tok = 0, game = null, after = null, key = '', running = false, confirming = false;
+
+  function dims(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function say(html){ msg.innerHTML = html ? `<div class="box">${html}</div>` : ''; }
+  function pitch(){
+    const cs = getComputedStyle(document.documentElement);
+    const p1 = cs.getPropertyValue('--pitch').trim() || '#2f7d3a', p2 = cs.getPropertyValue('--pitch2').trim() || '#378a42';
+    const band = H / 10;
+    for (let i = 0; i < 10; i++){ g.fillStyle = i % 2 ? p2 : p1; g.fillRect(0, i * band, W, band + 1); }
+    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 4; g.strokeRect(2, 2, W - 4, H - 4);
+  }
+  function ballAt(x, y, rad){
+    g.save(); g.translate(x, y);
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, rad, 0, Math.PI * 2); g.fill();
+    g.font = `${rad * 2.1}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('⚽', 0, rad * .08);
+    g.restore();
+  }
+  function netGoal(x, y, w, h){
+    g.fillStyle = 'rgba(255,255,255,.16)'; g.fillRect(x, y, w, h);
+    g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1;
+    g.beginPath();
+    for (let i = x; i <= x + w; i += 14){ g.moveTo(i, y); g.lineTo(i, y + h); }
+    for (let j = y; j <= y + h; j += 12){ g.moveTo(x, j); g.lineTo(x + w, j); }
+    g.stroke();
+    g.strokeStyle = '#fff'; g.lineWidth = 6; g.lineCap = 'round';
+    g.strokeRect(x, y, w, h);
+  }
+  function bar(team, cx, cy, w, h){
+    const x = cx - w/2, y = cy - h/2, st = STRIPED[team];
+    g.save();
+    g.beginPath(); g.moveTo(x + h/2, y); g.arcTo(x + w, y, x + w, y + h, h/2); g.arcTo(x + w, y + h, x, y + h, h/2);
+    g.arcTo(x, y + h, x, y, h/2); g.arcTo(x, y, x + w, y, h/2); g.closePath();
+    g.save(); g.clip();
+    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, h); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h); }
+    else { g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, h); }
+    g.restore();
+    g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
+    g.restore();
+  }
+  function text(txt, x, y, size, colour){
+    g.fillStyle = colour || '#fff';
+    g.font = `800 ${size}px "Baloo 2","Trebuchet MS",sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = Math.max(4, size * .14); g.strokeStyle = 'rgba(18,48,26,.55)';
+    g.strokeText(txt, x, y); g.fillText(txt, x, y);
+  }
+  function dot(x, y, rad, fill, stroke){
+    g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2);
+    if (fill){ g.fillStyle = fill; g.fill(); }
+    if (stroke){ g.lineWidth = 2; g.strokeStyle = stroke; g.stroke(); }
+  }
+  function line(x1, y1, x2, y2, colour, width){
+    g.strokeStyle = colour; g.lineWidth = width;
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+  }
+
+  function start(gameObj, cb, gameKey){
+    if (S.locked) return;
+    game = gameObj; after = cb; key = gameKey; tok++; confirming = false;
+    show('mini'); audio(); dims();
+    game.setup(W, H);
+    running = false; // held until the intro clears, so nothing moves before the child can play
+    say(`<div class="say" style="font-size:clamp(30px,8vw,50px)">${game.title}</div><p class="small">${game.intro}</p>`);
+    speak(`${game.title}! ${game.intro}`);
+    const t = tok;
+    setTimeout(() => { if (t !== tok) return; say(''); running = true; whistle(0, .4); }, 2400);
+    cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
+  }
+  function loop(t){
+    const dt = Math.min(.033, (t - last) / 1000); last = t;
+    if (running && game && game.update) game.update(dt);
+    if (game){ pitch(); game.draw(); }
+    raf = requestAnimationFrame(loop);
+  }
+  function finish(title, sub){
+    if (!running) return;
+    running = false; tok++;
+    awardTrophy(key);
+    whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
+    confetti(S.team); speak(`${title} ${sub || ''}`);
+    msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(32px,9vw,54px)">${title}</div>
+      ${sub ? `<p class="small">${sub}</p>` : ''}<button class="big" id="mdone">🏆 Done</button></div>`;
+    $('#mdone').onclick = stop;
+  }
+  function stop(){
+    running = false; confirming = false; tok++;
+    cancelAnimationFrame(raf); msg.innerHTML = ''; hush(); game = null;
+    const cb = after; after = null; cb && cb();
+  }
+  function askExit(){
+    if (confirming) return;
+    if (!running){ stop(); return; }
+    confirming = true; running = false;
+    say(`<div class="say" style="font-size:clamp(28px,7.6vw,44px)">Leave the game?</div>
+      <button class="big" id="mexitYes">Yes, leave</button><button class="plain" id="mexitNo">No, keep playing</button>`);
+    $('#mexitYes').onclick = () => { confirming = false; stop(); };
+    $('#mexitNo').onclick = () => { confirming = false; running = true; say(''); };
+  }
+  const at = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  cv.addEventListener('pointerdown', e => {
+    if (!running || !game || !game.down) return;
+    audio(); const p = at(e); game.down(p.x, p.y);
+    try { cv.setPointerCapture(e.pointerId); } catch(err) {}
+  });
+  cv.addEventListener('pointermove', e => { if (running && game && game.move){ const p = at(e); game.move(p.x, p.y); } });
+  ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, e => { if (running && game && game.up){ const p = at(e); game.up(p.x, p.y); } }));
+  addEventListener('resize', () => { if (!$('#mini').hidden){ dims(); if (game && game.resize) game.resize(W, H); } });
+  $('#mexit').onclick = askExit;
+  addEventListener('beforeunload', e => { if (!$('#mini').hidden){ e.preventDefault(); e.returnValue = ''; } });
+
+  function freeze(){ running = false; cancelAnimationFrame(raf); }
+  return { start, freeze, finish, say, pitch, ballAt, netGoal, bar, text, dot, line };
+})();
+
+/* ---------- prize game: penalty shootout ---------- */
+const Penalty = {
+  title: 'Penalties', intro: 'Tap where you want to shoot!',
+  SHOTS: 5, SAVE_CHANCE: .32, FLY: .55,
+  setup(W, H){
+    this.W = W; this.H = H;
+    this.r = Math.max(14, Math.min(26, Math.min(W, H) * .038));
+    this.goalW = W * .8; this.goalH = H * .18; this.goalX = (W - this.goalW) / 2; this.goalY = H * .07;
+    this.kw = this.goalW * .26; this.kh = Math.max(16, H * .026);
+    this.ky = this.goalY + this.goalH - this.kh;
+    this.kx = W / 2; this.kFrom = W / 2; this.kTo = W / 2;
+    this.sx = W / 2; this.sy = H * .8; this.bx = this.sx; this.by = this.sy;
+    this.tx = W / 2; this.ty = this.goalY + this.goalH * .55;
+    this.keeper = other(S.team); // picked once — other() is random per call
+    this.shots = 0; this.goals = 0; this.results = []; this.phase = 'aim'; this.t = 0; this.flash = '';
+  },
+  resize(W, H){
+    const { shots, goals, results, keeper } = this;
+    this.setup(W, H);
+    this.shots = shots; this.goals = goals; this.results = results; this.keeper = keeper;
+  },
+  down(x, y){
+    if (this.phase !== 'aim' || y > this.H * .66) return;
+    this.tx = Math.max(this.goalX + this.r, Math.min(this.goalX + this.goalW - this.r, x));
+    this.kFrom = this.kx;
+    this.kTo = Math.random() < this.SAVE_CHANCE
+      ? this.tx + (Math.random() - .5) * this.kw * .5
+      : this.goalX + this.kw / 2 + Math.random() * (this.goalW - this.kw);
+    this.kTo = Math.max(this.goalX + this.kw / 2, Math.min(this.goalX + this.goalW - this.kw / 2, this.kTo));
+    this.phase = 'fly'; this.t = 0; thud();
+  },
+  update(dt){
+    if (this.phase === 'fly'){
+      this.t = Math.min(1, this.t + dt / this.FLY);
+      const e = this.t;
+      this.bx = this.sx + (this.tx - this.sx) * e;
+      this.by = this.sy + (this.ty - this.sy) * e - Math.sin(e * Math.PI) * this.H * .05;
+      this.kx = this.kFrom + (this.kTo - this.kFrom) * (1 - Math.pow(1 - e, 2));
+      if (this.t >= 1){
+        const saved = Math.abs(this.kx - this.bx) < this.kw / 2 + this.r * .8;
+        this.results.push(saved ? 'saved' : 'goal');
+        if (saved){ thud(); speak('Saved!'); this.flash = 'SAVED!'; }
+        else { this.goals++; cheer(); speak('Goal!'); this.flash = 'GOAL!'; }
+        this.shots++; this.phase = 'result'; this.t = 0;
+      }
+    } else if (this.phase === 'result'){
+      this.t += dt;
+      if (this.t > 1.3){
+        this.flash = '';
+        if (this.shots >= this.SHOTS){
+          Mini.finish(`${this.goals} out of ${this.SHOTS}!`, this.goals >= 3 ? 'Brilliant shooting!' : 'Good try — great shooting practice!');
+          this.phase = 'done';
+        } else {
+          this.bx = this.sx; this.by = this.sy; this.phase = 'aim';
+        }
+      }
+    }
+  },
+  draw(){
+    const W = this.W, H = this.H;
+    Mini.netGoal(this.goalX, this.goalY, this.goalW, this.goalH);
+    Mini.bar(this.keeper, this.kx, this.ky, this.kw, this.kh);
+    Mini.dot(W / 2, this.sy, this.r * .35, null, 'rgba(255,255,255,.5)');
+    for (let i = 0; i < this.SHOTS; i++){
+      const res = this.results[i];
+      Mini.dot(W / 2 - (this.SHOTS - 1) * 16 + i * 32, this.goalY + this.goalH + 26, 10,
+        res === 'goal' ? '#f5c400' : res === 'saved' ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.12)',
+        'rgba(255,255,255,.6)');
+    }
+    if (this.phase !== 'done') Mini.ballAt(this.bx, this.by, this.phase === 'fly' ? this.r * (1 - .3 * this.t) : this.r);
+    if (this.flash) Mini.text(this.flash, W / 2, H * .5, Math.min(72, W * .17), this.flash === 'GOAL!' ? '#f5c400' : '#fff');
+    if (this.phase === 'aim') Mini.text('Tap to shoot', W / 2, H * .68, Math.min(30, W * .07));
+  }
+};
+
+/* ---------- prize game: keepy-uppies ---------- */
+const Keepy = {
+  title: 'Keepy-uppies', intro: 'Tap the ball to keep it up!',
+  setup(W, H){
+    this.W = W; this.H = H;
+    this.r = Math.max(22, Math.min(38, Math.min(W, H) * .055));
+    this.ground = H * .92;
+    this.x = W / 2; this.y = H * .3; this.vx = 0; this.vy = 0;
+    this.n = 0; this.grav = H * .8; this.spin = 0;
+  },
+  resize(W, H){ this.W = W; this.H = H; this.ground = H * .92; this.x = Math.min(this.x, W - this.r); },
+  down(x, y){
+    if (Math.hypot(x - this.x, y - this.y) > this.r * 2.6) return;
+    this.vy = -this.H * .5;
+    this.vx = Math.max(-this.W * .45, Math.min(this.W * .45, this.vx + (this.x - x) * 2.6));
+    this.n++; thud();
+    if (this.n % 5 === 0) cheer();
+  },
+  update(dt){
+    this.vy += this.grav * dt;
+    this.vx += (this.W / 2 - this.x) * .3 * dt;
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    this.spin += this.vx * dt * .04;
+    if (this.x < this.r){ this.x = this.r; this.vx = Math.abs(this.vx) * .85; }
+    if (this.x > this.W - this.r){ this.x = this.W - this.r; this.vx = -Math.abs(this.vx) * .85; }
+    if (this.y + this.r >= this.ground){
+      const best = this.n > S.keepyBest;
+      if (best){ S.keepyBest = this.n; save(); }
+      Mini.finish(`${this.n} keepy-${this.n === 1 ? 'up' : 'ups'}!`,
+        best ? 'A new best score!' : S.keepyBest ? `Your best is ${S.keepyBest}.` : 'Tap the ball to keep it bouncing!');
+    }
+  },
+  draw(){
+    const W = this.W, H = this.H;
+    Mini.line(0, this.ground, W, this.ground, 'rgba(255,255,255,.55)', 5);
+    Mini.text(String(this.n), W / 2, H * .22, Math.min(120, W * .3), '#f5c400');
+    Mini.text(`Best ${S.keepyBest}`, W / 2, H * .32, Math.min(26, W * .062));
+    Mini.ballAt(this.x, this.y, this.r);
+  }
+};
+
+/* ---------- prize game: goal-mouth scramble ---------- */
+const Scramble = {
+  title: 'Scramble', intro: 'Tap the balls before they reach the goal!',
+  TIME: 30,
+  setup(W, H){
+    this.W = W; this.H = H;
+    this.r = Math.max(18, Math.min(30, Math.min(W, H) * .045));
+    this.line = H * .86; this.goalW = W * .7; this.goalX = (W - this.goalW) / 2;
+    this.balls = []; this.cleared = 0; this.through = 0;
+    this.left = this.TIME; this.spawnIn = .6;
+  },
+  resize(W, H){ this.W = W; this.H = H; this.line = H * .86; this.goalW = W * .7; this.goalX = (W - this.goalW) / 2; },
+  down(x, y){
+    let best = -1, bestD = Infinity;
+    this.balls.forEach((b, i) => {
+      const d = Math.hypot(x - b.x, y - b.y);
+      if (d < this.r * 2.4 && d < bestD){ bestD = d; best = i; }
+    });
+    if (best >= 0){ this.balls.splice(best, 1); this.cleared++; thud(); if (this.cleared % 5 === 0) cheer(); }
+  },
+  update(dt){
+    this.left -= dt;
+    const rush = 1 - this.left / this.TIME;
+    this.spawnIn -= dt;
+    if (this.spawnIn <= 0){
+      this.spawnIn = .95 - rush * .5;
+      this.balls.push({ x: this.goalX + this.r + Math.random() * (this.goalW - this.r * 2), y: -this.r, vy: this.H * (.11 + rush * .11 + Math.random() * .04) });
+    }
+    this.balls.forEach(b => b.y += b.vy * dt);
+    for (let i = this.balls.length - 1; i >= 0; i--){
+      if (this.balls[i].y - this.r > this.line){ this.balls.splice(i, 1); this.through++; }
+    }
+    if (this.left <= 0) Mini.finish(`${this.cleared} saved!`, this.through ? `${this.through} got past you.` : 'Nothing got past you!');
+  },
+  draw(){
+    const W = this.W, H = this.H;
+    Mini.netGoal(this.goalX, this.line, this.goalW, H - this.line);
+    this.balls.forEach(b => Mini.ballAt(b.x, b.y, this.r));
+    Mini.text(String(this.cleared), W * .22, H * .12, Math.min(64, W * .16), '#f5c400');
+    Mini.text(`${Math.max(0, Math.ceil(this.left))}s`, W * .78, H * .12, Math.min(46, W * .11));
+  }
+};
+
 /* ---------- session timeout ---------- */
 function lockSession(){
   if (S.locked) return;
   S.locked = true; S.token++; hush();
   try { Pong.freeze(); } catch(e) {}
+  try { Mini.freeze(); } catch(e) {}
   if (recognizer) try { recognizer.abort(); } catch(e) {}
   const el = $('#timeout'); el.hidden = false; el.focus();
 }
