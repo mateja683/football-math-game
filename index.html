@@ -61,11 +61,18 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .prizebtn{width:100%;min-height:60px;border-radius:22px;background:var(--chalk);color:var(--ink);font-size:24px;font-weight:800;
   margin-bottom:14px;box-shadow:0 6px 0 rgba(0,0,0,.25)}
 
+/* ---------- parent gate ---------- */
+.gateinput{width:100%;min-height:74px;border-radius:22px;border:0;background:var(--chalk);color:var(--ink);
+  font-size:44px;font-weight:800;text-align:center;box-shadow:0 6px 0 rgba(0,0,0,.25);margin:16px 0;-moz-appearance:textfield}
+.gateinput::-webkit-outer-spin-button,.gateinput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.gateinput.wrong{animation:wiggle .45s}
+.gate p{font-size:22px;opacity:.85;margin:4px 0 0}
+
 /* ---------- play ---------- */
 .bar{display:flex;align-items:center;gap:8px}
 .iconbtn{width:50px;height:50px;border-radius:50%;background:var(--glass);font-size:24px;flex:none;display:grid;place-items:center}
-.slots{flex:1;display:flex;justify-content:center;gap:6px}
-.slot{width:34px;height:34px;border-radius:50%;border:3px dashed rgba(255,255,255,.5);display:grid;place-items:center;font-size:24px;line-height:1}
+.slots{flex:1;display:flex;justify-content:center;gap:clamp(2px,1.2vw,6px)}
+.slot{width:clamp(15px,4.6vw,30px);height:clamp(15px,4.6vw,30px);border-radius:50%;border:3px dashed rgba(255,255,255,.5);display:grid;place-items:center;font-size:clamp(11px,3.4vw,20px);line-height:1}
 .slot.on{border:3px solid var(--chalk);background:rgba(255,255,255,.18)}
 .streak{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px}
 .streak i{width:clamp(14px,4.4vw,22px);height:10px;border-radius:5px;background:var(--glass);transition:background .3s}
@@ -124,7 +131,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .trophy{font-size:120px;line-height:1;margin-top:auto}
 .end h1{font-size:clamp(52px,14vw,84px);margin:0;line-height:1;text-shadow:0 5px 0 rgba(0,0,0,.2)}
 .end p{font-size:24px;margin:0 0 10px}
-.row5{font-size:40px;letter-spacing:4px}
+.row5{font-size:40px;font-weight:800}
 .big{min-height:70px;border-radius:22px;background:var(--yellow);color:var(--ink);font-size:30px;font-weight:800;box-shadow:0 7px 0 #a88700;width:100%}
 .plain{min-height:60px;border-radius:22px;background:var(--glass);font-size:24px;font-weight:700;width:100%}
 .end .plain:last-child{margin-bottom:auto}
@@ -133,7 +140,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 
 /* ---------- prize match ---------- */
-#pong{position:fixed;inset:0;z-index:20;background:var(--bg)}
+#pong{position:fixed;inset:0;z-index:20;background:var(--bg);touch-action:none;overscroll-behavior:none}
 #pc{display:block;width:100%;height:100%;touch-action:none}
 #pexit{position:absolute;left:10px;transform:translateY(-50%);background:rgba(0,0,0,.25)}
 #pmode{transform:translateY(-50%)}
@@ -174,7 +181,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 <!-- START -->
 <main class="app" id="start">
   <h1 class="title">Goal<br>Maths</h1>
-  <p class="lede">Get the answer right to score. Five goals wins the match. Ten right in a row wins the prize match.</p>
+  <p class="lede">Get the answer right to score. Ten questions makes a match. Get nine or more right first time to win the prize match.</p>
 
   <h2 class="label">Pick your team</h2>
   <div class="teams">
@@ -242,8 +249,8 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 <main class="app end" id="end" hidden>
   <div class="trophy">🏆</div>
   <h1>Full time!</h1>
-  <div class="row5">⚽⚽⚽⚽⚽</div>
-  <p>Five goals. Brilliant playing!</p>
+  <div class="row5" id="endScore">10/10</div>
+  <p id="endMsg">Brilliant playing!</p>
   <button class="big" id="replay">Play again</button>
   <button class="prizebtn" id="prizeEnd" hidden>🏆 Play the prize match</button>
   <button class="plain" id="change">Change team or game</button>
@@ -252,10 +259,23 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 <!-- PRIZE UNLOCKED -->
 <main class="app end" id="prize" hidden>
   <div class="trophy">🏆</div>
-  <h1>Ten in a row!</h1>
-  <p>You won the prize match.</p>
+  <h1 id="prizeTitle">Great scoring!</h1>
+  <p id="prizeMsg">You won the prize match.</p>
   <button class="big" id="prizeNow">Play the prize match</button>
   <button class="plain" id="prizeLater">Save it for later</button>
+</main>
+
+<!-- PARENT GATE -->
+<main class="app end gate" id="gate" hidden>
+  <div class="trophy">🔒</div>
+  <h1>Grown-up check</h1>
+  <p>A quick sum, so this bit is for the grown-ups.</p>
+  <form id="gateForm">
+    <p id="gateQ" style="font-size:40px;font-weight:800;margin:18px 0 0">6 × 7 = ?</p>
+    <input class="gateinput" id="gateInput" type="number" inputmode="numeric" pattern="[0-9]*" aria-label="Answer">
+    <button class="big" type="submit">Go</button>
+  </form>
+  <button class="plain" id="gateCancel">Cancel</button>
 </main>
 
 <!-- PRIZE MATCH -->
@@ -277,7 +297,8 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const STREAK_TARGET = 10;
+const ROUND_LEN = 10;
+const PRIZE_THRESHOLD = 9;
 
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('goalmaths') || '{}') || {}; } catch(e) {}
@@ -289,7 +310,7 @@ const S = {
   streak: saved.streak || 0,
   prizes: saved.prizes || 0,
   controls: saved.controls === 'buttons' ? 'buttons' : 'slide',
-  goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, unlocked: false
+  goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0
 };
 function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,max:S.max,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls})); } catch(e) {} }
 const TEAMS = {
@@ -386,7 +407,7 @@ function thud(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['start','play','end','prize'].forEach(s => $('#' + s).hidden = s !== id);
+  ['start','play','end','prize','gate'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#prizeEnd').hidden = S.prizes < 1;
   window.scrollTo(0,0);
@@ -423,7 +444,7 @@ function syncStart(){
 syncStart(); show('start');
 
 function kickoff(){
-  S.goals = 0; $('#confetti').innerHTML = '';
+  S.goals = 0; S.streak = 0; $('#confetti').innerHTML = '';
   audio(); whistle(0, .5);
   show('play'); slots(); streakBar(); next();
 }
@@ -433,8 +454,32 @@ $('#change').onclick = () => { $('#confetti').innerHTML = ''; show('start'); };
 $('#home').onclick = () => { S.token++; hush(); show('start'); };
 $('#again').onclick = () => S.q && speak(S.q.say);
 $('#countbtn').onclick = () => S.q && S.q.mode === 'flash' ? peek() : countWithMe();
-$('#pongStart').onclick = () => Pong.start(() => show('start'));
+$('#pongStart').onclick = () => parentGate(() => Pong.start(() => show('start')));
 $('#prizeEnd').onclick = () => usePrize(() => show('end'));
+
+/* ---------- parent gate ---------- */
+let gateAns = 0, gateCb = null;
+function parentGate(cb){
+  const a = ri(2, 12), b = ri(2, 12);
+  gateAns = a * b; gateCb = cb;
+  $('#gateQ').textContent = `${a} × ${b} = ?`;
+  $('#gateInput').value = ''; $('#gateInput').classList.remove('wrong');
+  hush(); S.token++;
+  show('gate');
+  setTimeout(() => $('#gateInput').focus(), 50);
+}
+$('#gateForm').onsubmit = e => {
+  e.preventDefault();
+  const inp = $('#gateInput');
+  if (+inp.value === gateAns){
+    const cb = gateCb; gateCb = null;
+    cb && cb();
+  } else {
+    inp.value = ''; inp.classList.remove('wrong'); void inp.offsetWidth; inp.classList.add('wrong');
+    inp.focus();
+  }
+};
+$('#gateCancel').onclick = () => { gateCb = null; show('start'); };
 
 /* ---------- questions ---------- */
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -557,13 +602,10 @@ function countWithMe(){
 function answer(v, el){
   if (S.busy || el.disabled) return;
   if (v === S.q.ans){
-    if (!S.missed){
-      S.streak++;
-      if (S.streak >= STREAK_TARGET){ S.streak = 0; S.prizes++; S.unlocked = true; }
-    }
+    if (!S.missed) S.streak++;
     save(); streakBar(); goal(el); return;
   }
-  if (!S.missed){ S.missed = true; S.streak = 0; save(); streakBar(); }
+  if (!S.missed){ S.missed = true; save(); streakBar(); }
   el.classList.remove('miss'); void el.offsetWidth; el.classList.add('miss'); el.disabled = true;
   if (S.q.mode === 'more') speak('Nearly! Count the shirts and try again.');
   else if (S.q.mode === 'bigger') speak('Nearly! Try the other one.');
@@ -573,14 +615,14 @@ function answer(v, el){
 }
 
 function slots(){
-  $('#slots').innerHTML = Array.from({length:5}, (_, i) => `<span class="slot${i < S.goals ? ' on' : ''}">${i < S.goals ? '⚽' : ''}</span>`).join('');
-  $('#slots').setAttribute('aria-label', `${S.goals} of 5 goals`);
+  $('#slots').innerHTML = Array.from({length:ROUND_LEN}, (_, i) => `<span class="slot${i < S.goals ? ' on' : ''}">${i < S.goals ? '⚽' : ''}</span>`).join('');
+  $('#slots').setAttribute('aria-label', `${S.goals} of ${ROUND_LEN} goals`);
 }
 function streakBar(){
-  const n = S.unlocked ? STREAK_TARGET : S.streak;
-  $('#streak').innerHTML = Array.from({length:STREAK_TARGET}, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('') +
-    `<b class="${n >= STREAK_TARGET - 3 ? 'near' : ''}">🏆</b>`;
-  $('#streak').setAttribute('aria-label', `${n} of ${STREAK_TARGET} in a row for the prize match`);
+  const n = S.streak;
+  $('#streak').innerHTML = Array.from({length:ROUND_LEN}, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('') +
+    `<b class="${n >= PRIZE_THRESHOLD - 1 ? 'near' : ''}">🏆</b>`;
+  $('#streak').setAttribute('aria-label', `${n} of ${ROUND_LEN} first time right, ${PRIZE_THRESHOLD} needed for the prize match`);
 }
 
 function goal(el){
@@ -592,9 +634,8 @@ function goal(el){
     const net = $('#net'); net.classList.remove('shake'); net.getBoundingClientRect(); net.classList.add('shake');
     setTimeout(() => {
       gt.hidden = true;
-      const resume = S.goals >= 5 ? fullTime : () => { show('play'); next(); };
-      if (S.unlocked){ S.unlocked = false; streakBar(); prizeUnlocked(resume); }
-      else resume();
+      if (S.goals >= ROUND_LEN) endOfRound();
+      else { show('play'); next(); }
     }, 1900);
   };
   if (reduced) { after(); return; }
@@ -611,17 +652,25 @@ function goal(el){
   anim.onfinish = () => { ball.remove(); after(); };
 }
 
-function fullTime(){
+function endOfRound(){
+  const hits = S.streak;
+  if (hits >= PRIZE_THRESHOLD){ S.prizes++; save(); prizeUnlocked(hits, () => fullTime(hits)); }
+  else fullTime(hits);
+}
+function fullTime(hits){
+  $('#endScore').textContent = `${hits}/${ROUND_LEN}`;
+  $('#endMsg').textContent = hits >= PRIZE_THRESHOLD ? 'Brilliant playing!' : `${hits} out of ${ROUND_LEN} right first time. Great effort!`;
   show('end');
   whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
-  setTimeout(() => speak('Full time! You scored five goals. Brilliant playing!'), 300);
+  setTimeout(() => speak(`Full time! You got ${hits} out of ${ROUND_LEN} right first time. Brilliant playing!`), 300);
   confetti(S.team);
 }
 
 /* ---------- prize ---------- */
-function prizeUnlocked(resume){
+function prizeUnlocked(hits, resume){
+  $('#prizeMsg').textContent = `${hits} out of ${ROUND_LEN} right first time! You won the prize match.`;
   show('prize'); confetti(S.team);
-  speak('Ten in a row! You won the prize match!');
+  speak(`${hits} out of ${ROUND_LEN}! You won the prize match!`);
   $('#prizeNow').onclick = () => usePrize(resume);
   $('#prizeLater').onclick = resume;
 }
@@ -634,7 +683,7 @@ function usePrize(after){
 /* ---------- prize match: two-player football ---------- */
 const Pong = (() => {
   const cv = $('#pc'), g = cv.getContext('2d'), msg = $('#pmsg');
-  let W, H, dpr, raf = 0, last = 0, state = 'idle', tok = 0, after = null;
+  let W, H, dpr, raf = 0, last = 0, state = 'idle', tok = 0, after = null, confirming = false;
   const WIN = 3;
   const pads = { top:{x:0, team:'red'}, bot:{x:0, team:'blue'} };
   const ball = {x:0, y:0, vx:0, vy:0, spin:0};
@@ -685,8 +734,21 @@ const Pong = (() => {
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
   }
   function stop(){
-    tok++; state = 'idle'; cancelAnimationFrame(raf); msg.innerHTML = ''; hush();
+    tok++; state = 'idle'; confirming = false; cancelAnimationFrame(raf); msg.innerHTML = ''; hush();
     const cb = after; after = null; cb && cb();
+  }
+  function askExit(){
+    if (confirming || state === 'idle' || state === 'over') return;
+    confirming = true;
+    const wasPlaying = state === 'play';
+    tok++; state = 'paused';
+    say(`<div class="say" style="font-size:clamp(28px,7.6vw,44px)">Leave the match?</div>
+      <button class="big" id="exitYes">Yes, leave</button><button class="plain" id="exitNo">No, keep playing</button>`);
+    $('#exitYes').onclick = () => { confirming = false; stop(); };
+    $('#exitNo').onclick = () => {
+      confirming = false; say('');
+      if (wasPlaying) state = 'play'; else countdown(Math.random() < .5 ? 1 : -1);
+    };
   }
   function scored(side){
     state = 'goal'; score[side]++; cheer();
@@ -835,7 +897,10 @@ const Pong = (() => {
   addEventListener('keydown', e => { if (!$('#pong').hidden){ keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
   addEventListener('resize', () => { if (!$('#pong').hidden) dims(); });
-  $('#pexit').onclick = stop;
+  $('#pexit').onclick = () => { if (state === 'over' || state === 'idle') stop(); else askExit(); };
+  addEventListener('beforeunload', e => {
+    if (!$('#pong').hidden){ e.preventDefault(); e.returnValue = ''; }
+  });
 
   return { start };
 })();
