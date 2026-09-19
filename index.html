@@ -56,6 +56,11 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .chip[aria-pressed="true"]{background:var(--chalk);color:var(--ink);border-color:var(--chalk)}
 .kickoff{margin-top:auto;width:100%;min-height:74px;border-radius:22px;background:var(--yellow);color:var(--ink);
   font-size:34px;font-weight:800;box-shadow:0 7px 0 #a88700;margin-bottom:8px}
+.catgrid{display:grid;gap:18px;margin-top:28px}
+.catcard{background:var(--glass);border:3px solid transparent;border-radius:28px;padding:30px 16px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;font-size:26px;font-weight:800}
+.catcard:active{transform:translateY(3px)}
+.caticon{font-size:64px;line-height:1}
 .kickoff:active,.big:active{transform:translateY(5px);box-shadow:0 2px 0 #a88700}
 .spacer{height:26px}
 .prizebtn{width:100%;min-height:60px;border-radius:22px;background:var(--chalk);color:var(--ink);font-size:24px;font-weight:800;
@@ -167,6 +172,14 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition:none !important}
   #goaltext.pop span{animation:none}
 }
+
+/* ---------- session timeout ---------- */
+#timeout{position:fixed;inset:0;z-index:100;background:rgba(10,28,15,.96);display:grid;place-items:center;
+  text-align:center;padding:24px}
+#timeout .box{max-width:360px}
+#timeout .ico{font-size:88px;line-height:1}
+#timeout h1{font-size:clamp(36px,10vw,56px);margin:12px 0 6px;line-height:1.05}
+#timeout p{font-size:22px;opacity:.9;margin:0}
 </style>
 </head>
 <body>
@@ -178,8 +191,19 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   </defs>
 </svg>
 
+<!-- CATEGORY -->
+<main class="app" id="category">
+  <h1 class="title">Goal<br>Maths</h1>
+  <p class="lede">What would you like to play?</p>
+  <div class="catgrid">
+    <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
+    <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
+  </div>
+</main>
+
 <!-- START -->
-<main class="app" id="start">
+<main class="app" id="start" hidden>
+  <div class="bar"><button class="iconbtn" id="toCategory" aria-label="Back to game categories">←</button></div>
   <h1 class="title">Goal<br>Maths</h1>
   <p class="lede">Get the answer right to score. Ten questions makes a match. Get nine or more right first time to win the prize match.</p>
 
@@ -190,26 +214,24 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="team" data-team="claret" aria-pressed="false"><span class="shirt"></span>Claret and blue</button>
   </div>
 
-  <h2 class="label">Numbers up to</h2>
-  <div class="chips" id="levels">
-    <button class="chip" data-max="5">5</button>
-    <button class="chip" data-max="10">10</button>
-  </div>
-
   <h2 class="label">Games</h2>
   <div class="chips">
-    <button class="chip mode" data-mode="count">Counting</button>
-    <button class="chip mode" data-mode="add">Adding</button>
-    <button class="chip mode" data-mode="take">Taking away</button>
-    <button class="chip mode" data-mode="more">Who has more?</button>
+    <button class="chip" id="allGames">All games</button>
   </div>
-
-  <h2 class="label">Harder games</h2>
-  <div class="chips">
-    <button class="chip mode" data-mode="next">Missing number</button>
-    <button class="chip mode" data-mode="make">Make 5 or 10</button>
-    <button class="chip mode" data-mode="flash">Quick look</button>
-    <button class="chip mode" data-mode="bigger">Bigger number</button>
+  <div id="modePicker" hidden>
+    <div class="chips">
+      <button class="chip mode" data-mode="count">Counting</button>
+      <button class="chip mode" data-mode="add">Adding</button>
+      <button class="chip mode" data-mode="take">Taking away</button>
+      <button class="chip mode" data-mode="more">Who has more?</button>
+    </div>
+    <h2 class="label">Harder games</h2>
+    <div class="chips">
+      <button class="chip mode" data-mode="next">Missing number</button>
+      <button class="chip mode" data-mode="make">Make 20</button>
+      <button class="chip mode" data-mode="flash">Quick look</button>
+      <button class="chip mode" data-mode="bigger">Bigger number</button>
+    </div>
   </div>
 
   <h2 class="label">Prize match controls</h2>
@@ -224,6 +246,15 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <div class="spacer"></div>
   <button class="prizebtn" id="pongStart">⚽ Two-player football</button>
   <button class="kickoff" id="kickoff">Kick off</button>
+</main>
+
+<!-- WRITING (placeholder) -->
+<main class="app end" id="writing" hidden>
+  <div class="trophy">✏️</div>
+  <h1>Coming soon!</h1>
+  <p>Writing games are on their way. For now, why not try the maths games?</p>
+  <button class="big" id="writingToMath">Play maths games</button>
+  <button class="plain" id="writingBack">Back</button>
 </main>
 
 <!-- PLAY -->
@@ -292,6 +323,13 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 
 <div id="goaltext" hidden><span>GOAL!</span></div>
 <div id="confetti"></div>
+<div id="timeout" tabindex="-1" hidden>
+  <div class="box">
+    <div class="ico">⏰</div>
+    <h1>Time for a break!</h1>
+    <p>Playtime is up for now. Ask a grown-up to reload the page to play again.</p>
+  </div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -299,20 +337,24 @@ const $$ = s => [...document.querySelectorAll(s)];
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ROUND_LEN = 10;
 const PRIZE_THRESHOLD = 9;
+const MAX_NUM = 20;
+const ALL_MODES = ['count','add','take','more','next','make','flash','bigger'];
+const SESSION_LIMIT_MS = 10 * 60 * 1000;
 
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('goalmaths') || '{}') || {}; } catch(e) {}
 const S = {
   team: saved.team || 'blue',
-  max: saved.max || 5,
+  allGames: saved.allGames !== false,
   modes: Array.isArray(saved.modes) && saved.modes.length ? saved.modes : ['count','add'],
   voice: saved.voice !== false,
   streak: saved.streak || 0,
   prizes: saved.prizes || 0,
   controls: saved.controls === 'buttons' ? 'buttons' : 'slide',
-  goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0
+  goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,max:S.max,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls})); } catch(e) {} }
+function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 const TEAMS = {
   blue:   {name:'blue and yellow', main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
   red:    {name:'red and white',   main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
@@ -407,7 +449,7 @@ function thud(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['start','play','end','prize','gate'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','start','play','end','prize','gate','writing'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#prizeEnd').hidden = S.prizes < 1;
   window.scrollTo(0,0);
@@ -422,11 +464,19 @@ function confetti(team){
   setTimeout(() => $('#confetti').innerHTML = '', 6500);
 }
 
+/* ---------- category screen ---------- */
+$('#goMath').onclick = () => show('start');
+$('#goWriting').onclick = () => show('writing');
+$('#toCategory').onclick = () => show('category');
+$('#writingToMath').onclick = () => show('start');
+$('#writingBack').onclick = () => show('category');
+
 /* ---------- start screen ---------- */
 $$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => { S.team = b.dataset.team; save(); syncStart(); }; });
-$$('#levels .chip').forEach(b => b.onclick = () => { S.max = +b.dataset.max; save(); syncStart(); });
+$('#allGames').onclick = () => { S.allGames = !S.allGames; save(); syncStart(); };
 $$('.mode').forEach(b => b.onclick = () => {
   const m = b.dataset.mode;
+  S.allGames = false;
   if (S.modes.includes(m)) { if (S.modes.length > 1) S.modes = S.modes.filter(x => x !== m); }
   else S.modes.push(m);
   save(); syncStart();
@@ -435,15 +485,17 @@ $('#voice').onclick = () => { S.voice = !S.voice; save(); syncStart(); };
 $$('#controls .chip').forEach(b => b.onclick = () => { S.controls = b.dataset.c; save(); syncStart(); });
 function syncStart(){
   $$('.team').forEach(b => b.setAttribute('aria-pressed', b.dataset.team === S.team));
-  $$('#levels .chip').forEach(b => b.setAttribute('aria-pressed', +b.dataset.max === S.max));
+  $('#allGames').setAttribute('aria-pressed', S.allGames);
+  $('#modePicker').hidden = S.allGames;
   $$('.mode').forEach(b => b.setAttribute('aria-pressed', S.modes.includes(b.dataset.mode)));
   $('#voice').setAttribute('aria-pressed', S.voice);
   $$('#controls .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === S.controls));
   $('#voice').textContent = S.voice ? 'Read questions out loud' : 'Voice off';
 }
-syncStart(); show('start');
+syncStart(); show('category');
 
 function kickoff(){
+  if (S.locked) return;
   S.goals = 0; S.streak = 0; $('#confetti').innerHTML = '';
   audio(); whistle(0, .5);
   show('play'); slots(); streakBar(); next();
@@ -460,6 +512,7 @@ $('#prizeEnd').onclick = () => usePrize(() => show('end'));
 /* ---------- parent gate ---------- */
 let gateAns = 0, gateCb = null;
 function parentGate(cb){
+  if (S.locked) return;
   const a = ri(2, 12), b = ri(2, 12);
   gateAns = a * b; gateCb = cb;
   $('#gateQ').textContent = `${a} × ${b} = ?`;
@@ -486,7 +539,7 @@ const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
 function make(){
-  const max = S.max, mode = pick(S.modes);
+  const max = MAX_NUM, mode = pick(activeModes());
   if (mode === 'count'){
     const n = ri(1, max);
     return {mode, key:'c'+n, n, ans:n, text:'How many balls?', say:'How many balls can you count?', win:`Goal! ${n} ${n === 1 ? 'ball' : 'balls'}!`};
@@ -502,8 +555,8 @@ function make(){
       say:`There are ${n} balls. ${k} ${k === 1 ? 'rolls' : 'roll'} away. How many are left?`, win:`Goal! ${n - k} left!`};
   }
   if (mode === 'next'){
-    const top = max * 2, s = ri(1, top - 3), seq = [s, s+1, s+2, s+3];
-    const gap = max === 5 ? 3 : ri(1, 3);
+    const top = max, s = ri(1, top - 3), seq = [s, s+1, s+2, s+3];
+    const gap = ri(1, 3);
     const spoken = seq.map((v, i) => i === gap ? 'hmm' : v).join(', ');
     return {mode, key:`n${s}${gap}`, seq, gap, ans:seq[gap], hi:top,
       text: gap === 3 ? 'What number comes next?' : 'Which number is missing?',
@@ -516,17 +569,17 @@ function make(){
       say:`We have ${have}. How many more to make ${max}?`, win:`Goal! ${have} and ${ans} make ${max}!`, countSel:'.ball.empty'};
   }
   if (mode === 'flash'){
-    const n = ri(1, max === 5 ? 5 : 8);
+    const n = ri(1, 8);
     return {mode, key:'f'+n, n, ans:n, text:'Quick look! How many?', say:'Quick look! How many balls?', win:`Goal! It was ${n}!`};
   }
   if (mode === 'bigger'){
-    const top = max * 2;
+    const top = max;
     let a, b; do { a = ri(1, top); b = ri(1, top); } while (a === b);
     const ans = Math.max(a, b);
     return {mode, key:`b${a}${b}`, a, b, ans, pickFrom:[a, b], text:'Which number is bigger?', say:`Which is bigger, ${a} or ${b}?`,
       win:`Goal! ${ans} is bigger than ${Math.min(a, b)}!`};
   }
-  const gap = max > 5 ? 2 : 1;
+  const gap = 2;
   let a, b; do { a = ri(1, max); b = ri(1, max); } while (Math.abs(a - b) < gap);
   const ans = a > b ? S.team : other(S.team);
   return {mode:'more', key:`m${a}${b}`, a, b, ans, text:'Which team has more players?', say:'Which team has more players?',
@@ -572,7 +625,7 @@ function next(){
 
   stage.querySelectorAll('.grp').forEach(g => g.onclick = () => answer(isNaN(+g.dataset.v) ? g.dataset.v : +g.dataset.v, g));
   if (numeric){
-    answers.innerHTML = options(q.ans, q.hi || S.max).map(v => `<button class="ans" data-v="${v}">${v}</button>`).join('');
+    answers.innerHTML = options(q.ans, q.hi || MAX_NUM).map(v => `<button class="ans" data-v="${v}">${v}</button>`).join('');
     answers.querySelectorAll('.ans').forEach(b => b.onclick = () => answer(+b.dataset.v, b));
   }
   answers.hidden = !numeric; cb.hidden = !counting;
@@ -685,17 +738,19 @@ const Pong = (() => {
   const cv = $('#pc'), g = cv.getContext('2d'), msg = $('#pmsg');
   let W, H, dpr, raf = 0, last = 0, state = 'idle', tok = 0, after = null, confirming = false;
   const WIN = 3;
+  const MIN_PAD_SCALE = .5, SHRINK_PER_HIT = .09;
+  let fullSpeedStreak = 0;
   const pads = { top:{x:0, team:'red'}, bot:{x:0, team:'blue'} };
   const ball = {x:0, y:0, vx:0, vy:0, spin:0};
   const score = {top:0, bot:0};
   const keys = new Set(), touches = new Map();
-  let padW, padH, goalW, r;
+  let padW, padH, padWEff, goalW, r;
 
   function dims(){
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    padW = Math.max(80, W * .28); padH = Math.max(16, H * .024);
+    padW = Math.max(80, W * .28); padWEff = padW; padH = Math.max(16, H * .024);
     goalW = W * .46; r = Math.max(12, Math.min(24, Math.min(W, H) * .035));
     pads.top.y = H * .1; pads.bot.y = H * .9;
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
@@ -704,6 +759,7 @@ const Pong = (() => {
 
   function serve(dir){
     ball.x = W/2; ball.y = H/2;
+    fullSpeedStreak = 0;
     const s = base(), a = (Math.random() - .5) * 1.0;
     ball.vx = s * Math.sin(a); ball.vy = dir * s * Math.cos(a);
   }
@@ -721,6 +777,7 @@ const Pong = (() => {
     }, 700 * i));
   }
   function start(cb){
+    if (S.locked) return;
     after = cb; tok++; hush();
     pads.bot.team = S.team; pads.top.team = other(S.team);
     score.top = score.bot = 0;
@@ -759,8 +816,7 @@ const Pong = (() => {
       speak(`${cap(teamName(team))} win the prize match!`);
       confetti(team);
       msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${cap(teamName(team))} win!</div>
-        <button class="big" id="rematch">Rematch</button><button class="plain" id="pback">Back to maths</button></div>`;
-      $('#rematch').onclick = () => { score.top = score.bot = 0; tok++; msg.innerHTML = ''; countdown(Math.random() < .5 ? 1 : -1); };
+        <button class="big" id="pback">Back to maths</button></div>`;
       $('#pback').onclick = stop;
       return;
     }
@@ -771,12 +827,14 @@ const Pong = (() => {
   }
   function hit(pad, dir){
     const speed = Math.min(maxSpeed(), Math.hypot(ball.vx, ball.vy) * 1.07);
-    const off = Math.max(-1, Math.min(1, (ball.x - pad.x) / (padW/2)));
+    if (speed >= maxSpeed() - .5) fullSpeedStreak++;
+    const off = Math.max(-1, Math.min(1, (ball.x - pad.x) / (padWEff/2)));
     const a = off * 1.0;
     ball.vx = speed * Math.sin(a); ball.vy = dir * speed * Math.cos(a);
     thud();
   }
   function update(dt){
+    padWEff = padW * Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
     const ks = W * (S.controls === 'buttons' ? 1.05 : 1.3) * dt;
     if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
     if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
@@ -788,10 +846,10 @@ const Pong = (() => {
     if (ball.x > W - r){ ball.x = W - r; ball.vx = -Math.abs(ball.vx); }
 
     const b = pads.bot, t = pads.top;
-    if (ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padW/2 + r){
+    if (ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
       ball.y = b.y - padH/2 - r; hit(b, -1);
     }
-    if (ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padW/2 + r){
+    if (ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padWEff/2 + r){
       ball.y = t.y + padH/2 + r; hit(t, 1);
     }
     const inMouth = Math.abs(ball.x - W/2) < goalW/2 - r * .3;
@@ -818,15 +876,15 @@ const Pong = (() => {
     g.stroke();
   }
   function drawPad(p){
-    const x = p.x - padW/2, y = p.y - padH/2;
-    g.save(); rr(x, y, padW, padH, padH/2); g.clip();
-    if (p.team === 'red'){ g.fillStyle = '#fff'; g.fillRect(x, y, padW, padH); g.fillStyle = '#d4152b'; for (let i = x; i < x + padW; i += 16) g.fillRect(i, y, 8, padH); }
+    const w = padWEff, x = p.x - w/2, y = p.y - padH/2;
+    g.save(); rr(x, y, w, padH, padH/2); g.clip();
+    if (p.team === 'red'){ g.fillStyle = '#fff'; g.fillRect(x, y, w, padH); g.fillStyle = '#d4152b'; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, padH); }
     else {
-      g.fillStyle = TEAMS[p.team].main; g.fillRect(x, y, padW, padH);
-      if (p.team === 'claret'){ g.fillStyle = TEAMS.claret.trim; g.fillRect(x, y, padW * .18, padH); g.fillRect(x + padW * .82, y, padW * .18, padH); }
+      g.fillStyle = TEAMS[p.team].main; g.fillRect(x, y, w, padH);
+      if (p.team === 'claret'){ g.fillStyle = TEAMS.claret.trim; g.fillRect(x, y, w * .18, padH); g.fillRect(x + w * .82, y, w * .18, padH); }
     }
     g.restore();
-    rr(x, y, padW, padH, padH/2); g.lineWidth = 4; g.strokeStyle = p.team === 'red' ? '#8f0d1c' : TEAMS[p.team].trim; g.stroke();
+    rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = p.team === 'red' ? '#8f0d1c' : TEAMS[p.team].trim; g.stroke();
   }
   function drawScore(side, value){
     g.save();
@@ -894,7 +952,7 @@ const Pong = (() => {
   });
   cv.addEventListener('pointermove', e => { if (S.controls === 'buttons') return; const s = touches.get(e.pointerId); if (s) pads[s].x = e.clientX; });
   ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, e => touches.delete(e.pointerId)));
-  addEventListener('keydown', e => { if (!$('#pong').hidden){ keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); } });
+  addEventListener('keydown', e => { if (!S.locked && !$('#pong').hidden){ keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
   addEventListener('resize', () => { if (!$('#pong').hidden) dims(); });
   $('#pexit').onclick = () => { if (state === 'over' || state === 'idle') stop(); else askExit(); };
@@ -902,8 +960,18 @@ const Pong = (() => {
     if (!$('#pong').hidden){ e.preventDefault(); e.returnValue = ''; }
   });
 
-  return { start };
+  function freeze(){ cancelAnimationFrame(raf); keys.clear(); touches.clear(); }
+  return { start, freeze };
 })();
+
+/* ---------- session timeout ---------- */
+function lockSession(){
+  if (S.locked) return;
+  S.locked = true; S.token++; hush();
+  try { Pong.freeze(); } catch(e) {}
+  const el = $('#timeout'); el.hidden = false; el.focus();
+}
+setTimeout(lockSession, SESSION_LIMIT_MS);
 </script>
 </body>
 </html>
