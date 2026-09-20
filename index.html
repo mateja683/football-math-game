@@ -239,6 +239,10 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <pattern id="stripes3" width="20" height="100" patternUnits="userSpaceOnUse">
       <rect width="10" height="100" fill="#ffffff"/><rect x="10" width="10" height="100" fill="#1b1b1b"/>
     </pattern>
+    <!-- halves, not stripes: one pattern tile as wide as the whole shirt, so the split lands on its centre line -->
+    <pattern id="halves" width="100" height="100" patternUnits="userSpaceOnUse">
+      <rect width="50" height="100" fill="#e01c21"/><rect x="50" width="50" height="100" fill="#ffffff"/>
+    </pattern>
   </defs>
 </svg>
 
@@ -483,12 +487,12 @@ function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // otherwise be mangled. `fam` groups kits that look alike, so the prize match never picks a
 // near-identical opponent - the two sides still have to be tellable apart at a glance.
 const TEAMS = {
-  blue:    {name:'Blue and yellow',   fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
-  red:     {name:'Red and white',     fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
-  claret:  {name:'Claret and blue',   fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
+  blue:    {name:'AFC Wimbledon',     fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff'], say:'A F C Wimbledon'},
+  red:     {name:'Crvena Zvezda',     fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
+  claret:  {name:'West Ham',          fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
   navy:    {name:'Chelsea',           fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
   garnet:  {name:'Barcelona',         fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
-  amber:   {name:'Amber and blue',    fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
+  amber:   {name:'Mansfield Town',    fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
   scarlet: {name:'Arsenal',           fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
   allred:  {name:'Liverpool',         fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
   crimson: {name:'Man United',        fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff'], say:'Manchester United'},
@@ -496,14 +500,28 @@ const TEAMS = {
   lion:    {name:'Millwall',          fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
   sky:     {name:'Man City',          fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff'], say:'Manchester City'},
   white:   {name:'Tottenham',         fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
-  gold:    {name:'MK Dons',           fam:'white',  main:'#f6f6f2', trim:'#c8961e', confetti:['#ffffff','#c8961e'], say:'M K Dons'},
+  halves:  {name:'Feyenoord',         fam:'red',    main:'#e01c21', trim:'#ffffff', confetti:['#e01c21','#ffffff']},
   black:   {name:'Partizan Belgrade', fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']}
 };
-const STRIPED = {
-  red:    { url:'stripes',  base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
-  garnet: { url:'stripes2', base:'#003399', accent:'#a50044', dark:'#6d0033' },
-  black:  { url:'stripes3', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' }
+// Kits that aren't a plain colour. `url` is the SVG pattern the shirt is filled with; `kind`
+// is how the same kit gets painted on canvas and on the arrow buttons.
+const PATTERNED = {
+  red:    { url:'stripes',  kind:'stripes', base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
+  garnet: { url:'stripes2', kind:'stripes', base:'#003399', accent:'#a50044', dark:'#6d0033' },
+  black:  { url:'stripes3', kind:'stripes', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
+  halves: { url:'halves',   kind:'halves',  base:'#ffffff', accent:'#e01c21', dark:'#9c0f14' }
 };
+// One place both canvases paint a patterned kit, so a new `kind` only has to be taught once.
+function patternFill(g, st, x, y, w, h){
+  if (st.kind === 'halves'){
+    g.fillStyle = st.accent; g.fillRect(x, y, w / 2, h);
+    g.fillStyle = st.base;   g.fillRect(x + w / 2, y, w - w / 2, h);
+    return;
+  }
+  g.fillStyle = st.base; g.fillRect(x, y, w, h);
+  g.fillStyle = st.accent;
+  for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h);
+}
 const SLEEVED = ['claret','amber','scarlet','lion'];
 if (!TEAMS[S.team]) S.team = 'blue';
 // Some kits are pale (white, gold, sky), so anything drawn on top of one needs dark ink.
@@ -522,10 +540,12 @@ const teamName = t => TEAMS[t].name;
 const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not what's on screen
 (function kitStyles(){
   const css = Object.keys(TEAMS).map(t => {
-    const st = STRIPED[t];
+    const st = PATTERNED[t];
+    const bg = st && st.kind === 'halves'
+      ? `linear-gradient(90deg,${st.accent} 0 50%,${st.base} 50% 100%)`
+      : st ? `repeating-linear-gradient(90deg,${st.base} 0 12px,${st.accent} 12px 24px)` : '';
     return st
-      ? `.pbtn.${t}{background:repeating-linear-gradient(90deg,${st.base} 0 12px,${st.accent} 12px 24px);` +
-        `border-color:${st.dark};color:#fff;text-shadow:0 0 6px #12301a,0 0 2px #12301a}`
+      ? `.pbtn.${t}{background:${bg};border-color:${st.dark};color:#fff;text-shadow:0 0 6px #12301a,0 0 2px #12301a}`
       : `.pbtn.${t}{background:${TEAMS[t].main};border-color:${TEAMS[t].trim};color:${kitInk(t)}}`;
   }).join('\n');
   const el = document.createElement('style'); el.textContent = css; document.head.appendChild(el);
@@ -533,7 +553,7 @@ const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not
 
 /* ---------- drawing ---------- */
 function shirt(team, label){
-  const st = STRIPED[team];
+  const st = PATTERNED[team];
   const body = st ? `fill:url(#${st.url})` : `fill:${TEAMS[team].main}`;
   const trim = st ? st.accent : TEAMS[team].trim;
   const cuff = SLEEVED.includes(team) ? TEAMS[team].main : trim;
@@ -1420,15 +1440,15 @@ const Pong = (() => {
   }
   function drawPad(p){ drawBar(p.team, p.x, p.y, padWEff); }
   function kitFill(team, x, y, w, h){
-    const st = STRIPED[team];
-    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, h); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h); }
+    const st = PATTERNED[team];
+    if (st) patternFill(g, st, x, y, w, h);
     else {
       g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, h);
       if (SLEEVED.includes(team)){ g.fillStyle = TEAMS[team].trim; g.fillRect(x, y, w * .18, h); g.fillRect(x + w * .82, y, w * .18, h); }
     }
   }
   function drawBar(team, cx, cy, w){
-    const x = cx - w/2, y = cy - padH/2, st = STRIPED[team];
+    const x = cx - w/2, y = cy - padH/2, st = PATTERNED[team];
     g.save(); rr(x, y, w, padH, padH/2); g.clip(); kitFill(team, x, y, w, padH); g.restore();
     rr(x, y, w, padH, padH/2); g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
   }
@@ -1442,7 +1462,7 @@ const Pong = (() => {
     [0, W].forEach(x => { g.beginPath(); g.arc(x, y, padH * .45, 0, Math.PI * 2); g.fill(); });
   }
   function figure(team, cx, cy, w, keeper){
-    const st = STRIPED[team], outline = st ? st.dark : TEAMS[team].trim;
+    const st = PATTERNED[team], outline = st ? st.dark : TEAMS[team].trim;
     const bodyW = keeper ? Math.min(w, padH * 2.4) : w;
     const bodyH = padH * 1.7, headR = padH * .5, by = cy - bodyH * .30;
     if (keeper){ // outstretched arms, as wide as the keeper actually blocks
@@ -1458,7 +1478,7 @@ const Pong = (() => {
     g.lineWidth = 3; g.strokeStyle = 'rgba(18,48,26,.6)'; g.stroke();
   }
   function drawMate(m){
-    const team = pads[m.side].team, st = STRIPED[team];
+    const team = pads[m.side].team, st = PATTERNED[team];
     g.fillStyle = 'rgba(0,0,0,.22)';
     g.beginPath(); g.ellipse(m.x, m.y + mateR * .55, mateR * .9, mateR * .35, 0, 0, Math.PI * 2); g.fill();
     g.save(); g.beginPath(); g.arc(m.x, m.y, mateR, 0, Math.PI * 2); g.clip();
@@ -1594,12 +1614,12 @@ const Mini = (() => {
     g.strokeRect(x, y, w, h);
   }
   function bar(team, cx, cy, w, h){
-    const x = cx - w/2, y = cy - h/2, st = STRIPED[team];
+    const x = cx - w/2, y = cy - h/2, st = PATTERNED[team];
     g.save();
     g.beginPath(); g.moveTo(x + h/2, y); g.arcTo(x + w, y, x + w, y + h, h/2); g.arcTo(x + w, y + h, x, y + h, h/2);
     g.arcTo(x, y + h, x, y, h/2); g.arcTo(x, y, x + w, y, h/2); g.closePath();
     g.save(); g.clip();
-    if (st){ g.fillStyle = st.base; g.fillRect(x, y, w, h); g.fillStyle = st.accent; for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h); }
+    if (st) patternFill(g, st, x, y, w, h);
     else { g.fillStyle = TEAMS[team].main; g.fillRect(x, y, w, h); }
     g.restore();
     g.lineWidth = 4; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
