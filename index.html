@@ -477,24 +477,27 @@ const S = {
 function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
-// Kit colours only - no real club names, crests or mascots anywhere in the UI.
-// `fam` groups kits that look alike so the prize match never picks a near-identical opponent.
+// Club names label the kits, but the kits themselves are still colours only - no crests,
+// badges, mascots or club logos are ever drawn (see the design rules in CLAUDE.md).
+// `name` is what's shown; `say` is what the voice reads out where an abbreviation would
+// otherwise be mangled. `fam` groups kits that look alike, so the prize match never picks a
+// near-identical opponent - the two sides still have to be tellable apart at a glance.
 const TEAMS = {
-  blue:    {name:'blue and yellow',         fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
-  red:     {name:'red and white stripes',   fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
-  claret:  {name:'claret and blue',         fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
-  navy:    {name:'deep blue and white',     fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
-  garnet:  {name:'blue and garnet stripes', fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
-  amber:   {name:'amber and blue',          fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
-  scarlet: {name:'red with white sleeves',  fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
-  allred:  {name:'all red',                 fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
-  crimson: {name:'red and black',           fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff']},
-  royal:   {name:'royal blue and white',    fam:'blue',   main:'#1a53c8', trim:'#ffffff', confetti:['#1a53c8','#ffffff']},
-  lion:    {name:'blue with white sleeves', fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
-  sky:     {name:'sky blue and navy',       fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff']},
-  white:   {name:'white and navy',          fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
-  gold:    {name:'white and gold',          fam:'white',  main:'#f6f6f2', trim:'#c8961e', confetti:['#ffffff','#c8961e']},
-  black:   {name:'black and white stripes', fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']}
+  blue:    {name:'Blue and yellow',   fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
+  red:     {name:'Red and white',     fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
+  claret:  {name:'Claret and blue',   fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
+  navy:    {name:'Chelsea',           fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
+  garnet:  {name:'Barcelona',         fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
+  amber:   {name:'Amber and blue',    fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
+  scarlet: {name:'Arsenal',           fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
+  allred:  {name:'Liverpool',         fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
+  crimson: {name:'Man United',        fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff'], say:'Manchester United'},
+  royal:   {name:'Everton',           fam:'blue',   main:'#1a53c8', trim:'#ffffff', confetti:['#1a53c8','#ffffff']},
+  lion:    {name:'Millwall',          fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
+  sky:     {name:'Man City',          fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff'], say:'Manchester City'},
+  white:   {name:'Tottenham',         fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
+  gold:    {name:'MK Dons',           fam:'white',  main:'#f6f6f2', trim:'#c8961e', confetti:['#ffffff','#c8961e'], say:'M K Dons'},
+  black:   {name:'Partizan Belgrade', fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']}
 };
 const STRIPED = {
   red:    { url:'stripes',  base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
@@ -516,7 +519,7 @@ const other = t => {
   return pick(far.length ? far : keys);
 };
 const teamName = t => TEAMS[t].name;
-const cap = s => s[0].toUpperCase() + s.slice(1);
+const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not what's on screen
 (function kitStyles(){
   const css = Object.keys(TEAMS).map(t => {
     const st = STRIPED[t];
@@ -659,7 +662,7 @@ let wordEndReplay = null;
 
 /* ---------- start screen ---------- */
 $('#teamGrid').innerHTML = Object.keys(TEAMS).map(t =>
-  `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${cap(TEAMS[t].name)}</button>`).join('');
+  `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${TEAMS[t].name}</button>`).join('');
 $$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => { S.team = b.dataset.team; save(); syncStart(); }; });
 $('#allGames').onclick = () => { S.allGames = !S.allGames; save(); syncStart(); };
 $$('.mode').forEach(b => b.onclick = () => {
@@ -772,7 +775,7 @@ function make(){
   const opp = other(S.team);
   const ans = a > b ? S.team : opp;
   return {mode:'more', key:`m${a}${b}${opp}`, a, b, opp, ans, text:'Which team has more players?', say:'Which team has more players?',
-    win:`Goal! The ${teamName(ans)} team has more!`};
+    win:`Goal! ${teamSay(ans)} have more!`};
 }
 function options(ans, hi){
   const pool = [ans-1, ans+1, ans-2, ans+2, ans-3, ans+3].filter(x => x >= 1 && x <= hi);
@@ -792,7 +795,7 @@ function next(){
   let numeric = true, counting = true;
 
   if (q.mode === 'more'){
-    const grp = (team, n) => `<button class="grp" data-v="${team}" aria-label="${teamName(team)} team">${Array.from({length:n}, () => shirt(team)).join('')}</button>`;
+    const grp = (team, n) => `<button class="grp" data-v="${team}" aria-label="${teamName(team)}">${Array.from({length:n}, () => shirt(team)).join('')}</button>`;
     stage.innerHTML = `<div class="groups">${grp(S.team, q.a)}${grp(q.opp, q.b)}</div>`;
     numeric = counting = false;
   } else if (q.mode === 'bigger'){
@@ -1240,9 +1243,9 @@ const Pong = (() => {
       state = 'over';
       awardTrophy(variant === 'classic' ? 'keepers' : variant);
       whistle(.3, .3); whistle(.75, .3); whistle(1.2, .9);
-      speak(`${cap(teamName(team))} win the prize match!`);
+      speak(`${teamSay(team)} win the prize match!`);
       confetti(team);
-      msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${cap(teamName(team))} win!</div>
+      msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${teamName(team)} win!</div>
         <button class="big" id="pback">Back to maths</button></div>`;
       $('#pback').onclick = stop;
       return;
@@ -1617,12 +1620,14 @@ const Mini = (() => {
     if (game){ pitch(); game.draw(); }
     raf = requestAnimationFrame(loop);
   }
-  function finish(title, sub){
+  // `spoken` overrides what the voice reads - a title with "Man Utd" in it reads better
+  // spelled out, and the screen still gets the short form.
+  function finish(title, sub, spoken){
     if (!running) return;
     running = false; tok++;
     awardTrophy(key);
     whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
-    confetti(S.team); speak(`${title} ${sub || ''}`);
+    confetti(S.team); speak(spoken || `${title} ${sub || ''}`);
     msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(32px,9vw,54px)">${title}</div>
       ${sub ? `<p class="small">${sub}</p>` : ''}<button class="big" id="mdone">🏆 Done</button></div>`;
     $('#mdone').onclick = stop;
@@ -1720,19 +1725,20 @@ const Penalty = {
         this.flash = '';
         if (this.shots >= this.EACH * 2){ this.done(); return; }
         this.turn = 1 - this.turn; this.setShot();
-        speak(`${cap(teamName(this.teams[this.turn]))}, your turn!`);
+        speak(`${teamSay(this.teams[this.turn])}, your turn!`);
       }
     }
   },
   done(){
     this.phase = 'over';
     const [a, b] = this.scores;
-    const line = `${cap(teamName(this.teams[0]))} ${a}, ${cap(teamName(this.teams[1]))} ${b}.`;
-    if (a === b) Mini.finish('A draw!', `${line} Well played, both of you!`);
+    const line = `${teamName(this.teams[0])} ${a}, ${teamName(this.teams[1])} ${b}.`;
+    const said = `${teamSay(this.teams[0])} ${a}, ${teamSay(this.teams[1])} ${b}.`;
+    if (a === b) Mini.finish('A draw!', `${line} Well played, both of you!`, `A draw! ${said} Well played, both of you!`);
     else {
       const win = this.teams[a > b ? 0 : 1];
       confetti(win);
-      Mini.finish(`${cap(teamName(win))} win!`, line);
+      Mini.finish(`${teamName(win)} win!`, line, `${teamSay(win)} win! ${said}`);
     }
   },
   draw(){
