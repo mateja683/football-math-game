@@ -46,9 +46,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .lede{font-size:21px;line-height:1.35;margin:0 0 8px;opacity:.92;max-width:30ch}
 .label{font-size:22px;font-weight:700;margin:20px 0 8px}
 .teams{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.team{background:var(--glass);border:3px solid transparent;border-radius:24px;padding:12px 8px 8px;
-  display:flex;flex-direction:column;align-items:center;font-size:16px;font-weight:700;line-height:1.15;text-align:center}
-.team svg{width:clamp(64px,20vw,92px);height:auto}
+.team{background:var(--glass);border:3px solid transparent;border-radius:24px;padding:10px 6px 8px;
+  display:flex;flex-direction:column;align-items:center;font-size:14px;font-weight:700;line-height:1.15;text-align:center}
+.team svg{width:clamp(54px,17vw,78px);height:auto}
 .team[aria-pressed="true"]{background:var(--glass2);border-color:var(--chalk)}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
 .chip{padding:8px 18px;border-radius:999px;background:var(--glass);border:2px solid rgba(255,255,255,.35);
@@ -65,7 +65,12 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 /* ---------- reading / writing ---------- */
 .wordtext{font-size:clamp(56px,18vw,108px);font-weight:800;text-align:center;margin:10px 0;letter-spacing:1px}
 .wordtext.miss{animation:wiggle .45s}
-.writepic{font-size:96px;text-align:center;line-height:1;margin-top:14px}
+.writepic{font-size:clamp(52px,15vw,78px);text-align:center;line-height:1;margin-top:6px}
+.label.tight{margin:12px 0 2px}
+.writetools{justify-content:center;margin-top:4px}
+/* the hint sits over the pad, not above it: showing it must never resize the canvas */
+.hintword{position:absolute;left:0;right:0;top:6px;margin:0;text-align:center;pointer-events:none;
+  font-size:clamp(38px,12vw,66px);font-weight:800;letter-spacing:2px;color:rgba(18,48,26,.22)}
 .micstatus{text-align:center;font-size:20px;opacity:.9;min-height:28px;margin:4px 0}
 .micbtn{min-height:130px;width:100%;border-radius:28px;background:var(--yellow);color:var(--ink);font-size:24px;font-weight:800;
   box-shadow:0 7px 0 #a88700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
@@ -75,9 +80,12 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .linkbtn{display:block;margin:10px auto 0;padding:6px;background:none;font-size:18px;font-weight:700;
   text-decoration:underline;opacity:.85}
 .judgebar{display:flex;flex-direction:column;gap:10px;margin-top:auto;margin-bottom:8px}
-.canvasbox{background:var(--chalk);border-radius:24px;flex:1;min-height:190px;margin:10px 0;
+.canvasbox{position:relative;background:var(--chalk);border-radius:24px;flex:1;min-height:250px;margin:8px 0 6px;
   box-shadow:0 6px 0 rgba(0,0,0,.25);touch-action:none;overflow:hidden}
-#wc{width:100%;height:100%;display:block;touch-action:none}
+/* absolutely positioned, not height:100% - .canvasbox is a flex item with no definite
+   height, so a percentage height never resolved and the canvas only covered the top of
+   the white pad, leaving most of it dead to the touch */
+#wc{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .kickoff:active,.big:active{transform:translateY(5px);box-shadow:0 2px 0 #a88700}
 .spacer{height:26px}
 .prizebtn{width:100%;min-height:60px;border-radius:22px;background:var(--chalk);color:var(--ink);font-size:24px;font-weight:800;
@@ -172,12 +180,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   color:#fff;border:4px solid rgba(255,255,255,.85);opacity:.82;touch-action:none;user-select:none;-webkit-user-select:none;
   display:grid;place-items:center;line-height:1;box-shadow:0 5px 0 rgba(0,0,0,.3)}
 .pbtn.held{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.3);opacity:1}
-.pbtn.blue{background:#1d3f9e;border-color:#f5c400}
-.pbtn.red{background:repeating-linear-gradient(90deg,#d4152b 0 12px,#ffffff 12px 24px);text-shadow:0 0 6px #12301a,0 0 2px #12301a}
-.pbtn.claret{background:#7a263a;border-color:#7cc6ec}
-.pbtn.navy{background:#0a3a7a;border-color:#ffffff}
-.pbtn.garnet{background:repeating-linear-gradient(90deg,#003399 0 12px,#a50044 12px 24px);text-shadow:0 0 6px #12301a,0 0 2px #12301a}
-.pbtn.amber{background:#e6a817;border-color:#1c3f94}
+/* .pbtn.<team> kit rules are generated from TEAMS at load - see kitStyles() */
 .pbtn.tl{top:max(12px,env(safe-area-inset-top));left:12px}
 .pbtn.tr{top:max(12px,env(safe-area-inset-top));right:12px}
 .pbtn.bl{bottom:max(12px,env(safe-area-inset-bottom));left:12px}
@@ -233,6 +236,9 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <pattern id="stripes2" width="20" height="100" patternUnits="userSpaceOnUse">
       <rect width="10" height="100" fill="#003399"/><rect x="10" width="10" height="100" fill="#a50044"/>
     </pattern>
+    <pattern id="stripes3" width="20" height="100" patternUnits="userSpaceOnUse">
+      <rect width="10" height="100" fill="#ffffff"/><rect x="10" width="10" height="100" fill="#1b1b1b"/>
+    </pattern>
   </defs>
 </svg>
 
@@ -273,14 +279,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <p class="lede">Get the answer right to score. Ten questions makes a match. Get nine or more right first time to win the prize match.</p>
 
   <h2 class="label">Pick your team</h2>
-  <div class="teams">
-    <button class="team" data-team="blue" aria-pressed="false"><span class="shirt"></span>Blue and yellow</button>
-    <button class="team" data-team="red" aria-pressed="false"><span class="shirt"></span>Red and white</button>
-    <button class="team" data-team="claret" aria-pressed="false"><span class="shirt"></span>Claret and blue</button>
-    <button class="team" data-team="navy" aria-pressed="false"><span class="shirt"></span>Blue and white</button>
-    <button class="team" data-team="garnet" aria-pressed="false"><span class="shirt"></span>Blue and garnet</button>
-    <button class="team" data-team="amber" aria-pressed="false"><span class="shirt"></span>Amber and blue</button>
-  </div>
+  <div class="teams" id="teamGrid"></div>
 
   <h2 class="label">Games</h2>
   <div class="chips">
@@ -341,15 +340,15 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="iconbtn" id="writingHome" aria-label="Back to game categories">←</button>
     <div class="slots" id="writeSlots" aria-label="Words written"></div>
   </div>
-  <h2 class="label" style="text-align:center">Write the word</h2>
+  <h2 class="label tight" style="text-align:center">Write the word</h2>
   <div class="writepic" id="writePic" aria-hidden="true">🐱</div>
-  <p class="wordtext" id="writeWord" hidden>cat</p>
-  <button class="countbtn" id="writeHint">Show hint</button>
-  <div class="canvasbox">
-    <canvas id="wc" aria-label="Write the word here"></canvas>
-  </div>
-  <div class="chips" style="justify-content:center">
+  <div class="chips writetools">
+    <button class="chip" id="writeHint">Show hint</button>
     <button class="chip" id="writeClear">Clear</button>
+  </div>
+  <div class="canvasbox">
+    <p class="hintword" id="writeWord" hidden>cat</p>
+    <canvas id="wc" aria-label="Write the word here"></canvas>
   </div>
   <div class="judgebar">
     <button class="big" id="writeRight">✓ That's right</button>
@@ -478,23 +477,56 @@ const S = {
 function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
+// Kit colours only - no real club names, crests or mascots anywhere in the UI.
+// `fam` groups kits that look alike so the prize match never picks a near-identical opponent.
 const TEAMS = {
-  blue:   {name:'blue and yellow',  main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
-  red:    {name:'red and white',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
-  claret: {name:'claret and blue',  main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
-  navy:   {name:'blue and white',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
-  garnet: {name:'blue and garnet',  main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
-  amber:  {name:'amber and blue',   main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']}
+  blue:    {name:'blue and yellow',         fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff']},
+  red:     {name:'red and white stripes',   fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff']},
+  claret:  {name:'claret and blue',         fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
+  navy:    {name:'deep blue and white',     fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
+  garnet:  {name:'blue and garnet stripes', fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
+  amber:   {name:'amber and blue',          fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
+  scarlet: {name:'red with white sleeves',  fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
+  allred:  {name:'all red',                 fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
+  crimson: {name:'red and black',           fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff']},
+  royal:   {name:'royal blue and white',    fam:'blue',   main:'#1a53c8', trim:'#ffffff', confetti:['#1a53c8','#ffffff']},
+  lion:    {name:'blue with white sleeves', fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
+  sky:     {name:'sky blue and navy',       fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff']},
+  white:   {name:'white and navy',          fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
+  gold:    {name:'white and gold',          fam:'white',  main:'#f6f6f2', trim:'#c8961e', confetti:['#ffffff','#c8961e']},
+  black:   {name:'black and white stripes', fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']}
 };
 const STRIPED = {
   red:    { url:'stripes',  base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
-  garnet: { url:'stripes2', base:'#003399', accent:'#a50044', dark:'#6d0033' }
+  garnet: { url:'stripes2', base:'#003399', accent:'#a50044', dark:'#6d0033' },
+  black:  { url:'stripes3', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' }
 };
-const SLEEVED = ['claret','amber'];
+const SLEEVED = ['claret','amber','scarlet','lion'];
 if (!TEAMS[S.team]) S.team = 'blue';
-const other = t => pick(Object.keys(TEAMS).filter(k => k !== t));
+// Some kits are pale (white, gold, sky), so anything drawn on top of one needs dark ink.
+function lightHex(h){
+  const r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
+  return r * .299 + g * .587 + b * .114 > 150;
+}
+const kitInk = t => lightHex(TEAMS[t].main) ? '#12301a' : '#ffffff';
+// The opponent is always from a different kit family, so the two sides never look the same.
+const other = t => {
+  const fam = TEAMS[t].fam, keys = Object.keys(TEAMS).filter(k => k !== t);
+  const far = keys.filter(k => TEAMS[k].fam !== fam);
+  return pick(far.length ? far : keys);
+};
 const teamName = t => TEAMS[t].name;
 const cap = s => s[0].toUpperCase() + s.slice(1);
+(function kitStyles(){
+  const css = Object.keys(TEAMS).map(t => {
+    const st = STRIPED[t];
+    return st
+      ? `.pbtn.${t}{background:repeating-linear-gradient(90deg,${st.base} 0 12px,${st.accent} 12px 24px);` +
+        `border-color:${st.dark};color:#fff;text-shadow:0 0 6px #12301a,0 0 2px #12301a}`
+      : `.pbtn.${t}{background:${TEAMS[t].main};border-color:${TEAMS[t].trim};color:${kitInk(t)}}`;
+  }).join('\n');
+  const el = document.createElement('style'); el.textContent = css; document.head.appendChild(el);
+})();
 
 /* ---------- drawing ---------- */
 function shirt(team, label){
@@ -626,6 +658,8 @@ function wordEnd(kind, hits, replay){
 let wordEndReplay = null;
 
 /* ---------- start screen ---------- */
+$('#teamGrid').innerHTML = Object.keys(TEAMS).map(t =>
+  `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${cap(TEAMS[t].name)}</button>`).join('');
 $$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => { S.team = b.dataset.team; save(); syncStart(); }; });
 $('#allGames').onclick = () => { S.allGames = !S.allGames; save(); syncStart(); };
 $$('.mode').forEach(b => b.onclick = () => {
@@ -886,6 +920,7 @@ function prizeUnlocked(hits, total, resume){
 const PRIZE_GAMES = [
   {key:'keepers',  ico:'🧤', name:'Keepers',    go: after => Pong.start(after, 'classic')},
   {key:'foosball', ico:'🥅', name:'Foosball',   go: after => Pong.start(after, 'foosball')},
+  {key:'squad',    ico:'👥', name:'Three-a-side', go: after => Pong.start(after, 'squad')},
   {key:'penalty',  ico:'⚽', name:'Penalties',  go: after => Mini.start(Penalty, after, 'penalty')},
   {key:'keepy',    ico:'🤹', name:'Keepy-uppies', go: after => Mini.start(Keepy, after, 'keepy')},
   {key:'scramble', ico:'🧹', name:'Scramble',   go: after => Mini.start(Scramble, after, 'scramble')}
@@ -939,7 +974,10 @@ function showCabinet(){
 const WORDS3 = [
   {w:'cat', e:'🐱'}, {w:'dog', e:'🐶'}, {w:'sun', e:'☀️'}, {w:'hat', e:'🎩'}, {w:'pig', e:'🐷'},
   {w:'fox', e:'🦊'}, {w:'owl', e:'🦉'}, {w:'ant', e:'🐜'}, {w:'cow', e:'🐮'}, {w:'bee', e:'🐝'},
-  {w:'egg', e:'🥚'}, {w:'bus', e:'🚌'}, {w:'bed', e:'🛏️'}, {w:'box', e:'📦'}
+  {w:'egg', e:'🥚'}, {w:'bus', e:'🚌'}, {w:'bed', e:'🛏️'}, {w:'box', e:'📦'},
+  {w:'van', e:'🚐'}, {w:'hen', e:'🐔'}, {w:'bat', e:'🦇'}, {w:'pen', e:'🖊️'}, {w:'key', e:'🔑'},
+  {w:'car', e:'🚗'}, {w:'web', e:'🕸️'}, {w:'bin', e:'🗑️'}, {w:'map', e:'🗺️'}, {w:'leg', e:'🦵'},
+  {w:'ear', e:'👂'}, {w:'eye', e:'👁️'}
 ];
 const WORDS4 = [
   {w:'frog', e:'🐸'}, {w:'fish', e:'🐟'}, {w:'lion', e:'🦁'}, {w:'bird', e:'🐦'}, {w:'star', e:'⭐'},
@@ -1033,17 +1071,29 @@ if (recognizer){
 }
 
 /* ---------- writing game ---------- */
-const WRITE_WORDS = [...WORDS3, ...WORDS4, ...WORDS5];
+const WRITE_WORDS = WORDS3; // three letters max - writing a word by hand is much harder than reading one
 const WR = { count:0, hits:0, missed:false, word:null, lastWord:null };
 const wc = $('#wc'), wg = wc.getContext('2d');
 let wDrawing = false, wLastX = 0, wLastY = 0;
+// The pad's box changes size after the web font loads, when the phone's address bar
+// collapses and on rotation. If the bitmap isn't resized with it the drawing surface ends up
+// squashed into part of the white area - which is why only the middle of the pad used to work.
 function wDims(){
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), rect = wc.getBoundingClientRect();
-  wc.width = rect.width * dpr; wc.height = rect.height * dpr;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(wc.clientWidth), h = Math.round(wc.clientHeight);
+  if (w < 1 || h < 1) return;
+  if (wc.width === w * dpr && wc.height === h * dpr) return;
+  let keep = null;
+  if (wc.width && wc.height){
+    keep = document.createElement('canvas'); keep.width = wc.width; keep.height = wc.height;
+    keep.getContext('2d').drawImage(wc, 0, 0);
+  }
+  wc.width = w * dpr; wc.height = h * dpr;
   wg.setTransform(dpr, 0, 0, dpr, 0, 0);
   wg.lineWidth = 8; wg.lineCap = 'round'; wg.lineJoin = 'round'; wg.strokeStyle = '#12301a';
+  if (keep) wg.drawImage(keep, 0, 0, w, h); // keep whatever the child has already written
 }
-function wClear(){ wg.clearRect(0, 0, wc.width, wc.height); }
+function wClear(){ wg.save(); wg.setTransform(1, 0, 0, 1, 0, 0); wg.clearRect(0, 0, wc.width, wc.height); wg.restore(); }
 wc.addEventListener('pointerdown', e => {
   wDrawing = true; const r = wc.getBoundingClientRect();
   wLastX = e.clientX - r.left; wLastY = e.clientY - r.top;
@@ -1057,6 +1107,7 @@ wc.addEventListener('pointermove', e => {
 });
 ['pointerup','pointercancel'].forEach(ev => wc.addEventListener(ev, () => wDrawing = false));
 addEventListener('resize', () => { if (!$('#writing').hidden) wDims(); });
+if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#writing').hidden) wDims(); }).observe(wc);
 
 function writeSlots(){
   $('#writeSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < WR.count ? ' on' : ''}">${i < WR.count ? '✏️' : ''}</span>`).join('');
@@ -1101,6 +1152,8 @@ const Pong = (() => {
   const MIN_PAD_SCALE = .5, SHRINK_PER_HIT = .09;
   let fullSpeedStreak = 0, variant = 'classic';
   let rowGap = 0, rowW = 0, rowWEff = 0; // foosball outfield rods
+  const MATES_PER_SIDE = 2, MATE_COOL = .18;
+  let mates = [], mateR = 0;             // three-a-side: two roaming team-mates per side
   const pads = { top:{x:0, team:'red'}, bot:{x:0, team:'blue'} };
   const ball = {x:0, y:0, vx:0, vy:0, spin:0};
   const score = {top:0, bot:0};
@@ -1117,8 +1170,12 @@ const Pong = (() => {
     pads.top.y = H * .1; pads.bot.y = H * .9;
     pads.top.oy = H * .70; pads.bot.oy = H * .30; // strikers play in the opposition half
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
+    mateDims();
   }
-  const base = () => H * .36, maxSpeed = () => H * 1.05;
+  // Three-a-side keeps the ball slower: there is a lot more to watch, and the deflections
+  // off the team-mates are what should make it interesting, not the pace.
+  const base = () => H * (variant === 'squad' ? .30 : .36);
+  const maxSpeed = () => H * (variant === 'squad' ? .72 : 1.05);
 
   function serve(dir){
     ball.x = W/2; ball.y = H/2;
@@ -1141,18 +1198,20 @@ const Pong = (() => {
   }
   function start(cb, v){
     if (S.locked) return;
-    variant = v === 'foosball' ? 'foosball' : 'classic';
+    variant = (v === 'foosball' || v === 'squad') ? v : 'classic';
     after = cb; tok++; hush();
     pads.bot.team = S.team; pads.top.team = other(S.team);
     score.top = score.bot = 0;
     show('pong'); audio(); dims();
     pads.top.x = pads.bot.x = W/2;
+    makeMates();
     syncControls();
     const how = S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger';
     const who = variant === 'foosball' ? 'your keeper and your strikers' : 'your keeper';
-    const title = variant === 'foosball' ? 'Foosball' : 'Prize match';
-    speak(`${title}! ${how} to move ${who}. First to three goals wins!`);
-    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}. First to ${WIN} wins!</p>`);
+    const title = variant === 'foosball' ? 'Foosball' : variant === 'squad' ? 'Three-a-side' : 'Prize match';
+    const extra = variant === 'squad' ? ' Your two team-mates run about on their own.' : '';
+    speak(`${title}! ${how} to move ${who}.${extra} First to three goals wins!`);
+    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}.${extra} First to ${WIN} wins!</p>`);
     const t = tok;
     setTimeout(() => { if (t === tok) countdown(Math.random() < .5 ? 1 : -1); }, 2600);
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
@@ -1179,7 +1238,7 @@ const Pong = (() => {
     const team = pads[side].team;
     if (score[side] >= WIN){
       state = 'over';
-      awardTrophy(variant === 'foosball' ? 'foosball' : 'keepers');
+      awardTrophy(variant === 'classic' ? 'keepers' : variant);
       whistle(.3, .3); whistle(.75, .3); whistle(1.2, .9);
       speak(`${cap(teamName(team))} win the prize match!`);
       confetti(team);
@@ -1193,9 +1252,11 @@ const Pong = (() => {
     const t = tok;
     setTimeout(() => { if (t === tok) countdown(side === 'top' ? 1 : -1); }, 1500); // serve towards the team that conceded
   }
-  function hit(cx, w, dir){
-    const speed = Math.min(maxSpeed(), Math.hypot(ball.vx, ball.vy) * 1.07);
-    if (speed >= maxSpeed() - .5) fullSpeedStreak++;
+  // `gain` is how much the touch speeds the ball up; `counts` is whether it feeds the
+  // rally counter that shrinks the keepers. A team-mate's deflection does neither.
+  function hit(cx, w, dir, gain = 1.07, counts = true){
+    const speed = Math.min(maxSpeed(), Math.hypot(ball.vx, ball.vy) * gain);
+    if (counts && speed >= maxSpeed() - .5) fullSpeedStreak++;
     const off = Math.max(-1, Math.min(1, (ball.x - cx) / (w/2)));
     const a = off * 1.0;
     ball.vx = speed * Math.sin(a); ball.vy = dir * speed * Math.cos(a);
@@ -1218,6 +1279,76 @@ const Pong = (() => {
     }
     return false;
   }
+  /* ----- three-a-side: two team-mates a side, roaming their own half ----- */
+  function makeMates(){
+    mates = [];
+    if (variant !== 'squad') return;
+    for (const side of ['bot','top'])
+      for (let i = 0; i < MATES_PER_SIDE; i++)
+        mates.push({ side, i, x: W * (i ? .68 : .32), y: 0, rx: 0, ry: 0, wob: 0, cool: 0 });
+    mateDims();
+  }
+  function mateDims(){
+    if (!mates.length) return;
+    mateR = Math.max(13, Math.min(28, Math.min(W, H) * .040));
+    const edge = mateR * 1.4;
+    for (const m of mates){
+      m.lo = m.side === 'bot' ? H * .54 : H * .18;
+      m.hi = m.side === 'bot' ? H * .82 : H * .46;
+      m.xlo = Math.max(edge, m.i ? W * .42 : W * .06);
+      m.xhi = Math.min(W - edge, m.i ? W * .94 : W * .58);
+      if (m.xhi < m.xlo) m.xhi = m.xlo = W / 2;
+      m.x = Math.min(Math.max(m.x, m.xlo), m.xhi);
+      m.y = Math.min(Math.max(m.y || (m.lo + m.hi) / 2, m.lo), m.hi);
+    }
+  }
+  // Half sense, half wander: each team-mate keeps to its own strip of its own half, goes to
+  // meet the ball when it comes in, drifts home when it doesn't, and re-rolls a random
+  // offset every second or so, so it never runs a straight line to the ball.
+  function moveMates(dt){
+    for (const m of mates){
+      m.cool = Math.max(0, m.cool - dt);
+      m.wob -= dt;
+      if (m.wob <= 0){
+        m.wob = .6 + Math.random() * 1.1;
+        m.rx = (Math.random() - .5) * W * .18;
+        m.ry = (Math.random() - .5) * (m.hi - m.lo) * .8;
+      }
+      const mine = m.side === 'bot' ? ball.y > H * .5 : ball.y < H * .5;
+      const tx = Math.min(Math.max((mine ? ball.x : (m.xlo + m.xhi) / 2) + m.rx, m.xlo), m.xhi);
+      const ty = Math.min(Math.max((mine ? ball.y : (m.lo + m.hi) / 2) + m.ry, m.lo), m.hi);
+      const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+      if (d < 1) continue;
+      const step = Math.min(H * (mine ? .42 : .26) * dt, d);
+      m.x += dx / d * step; m.y += dy / d * step;
+    }
+    for (let i = 0; i < mates.length; i++)          // team-mates don't stand on each other
+      for (let j = i + 1; j < mates.length; j++){
+        const a = mates[i], c = mates[j];
+        if (a.side !== c.side) continue;
+        const dx = c.x - a.x, dy = c.y - a.y, gap = mateR * 2.3, d = Math.hypot(dx, dy) || 1;
+        if (d >= gap) continue;
+        const push = (gap - d) / 2, ux = dx / d * push, uy = dy / d * push;
+        a.x = Math.min(Math.max(a.x - ux, a.xlo), a.xhi); a.y = Math.min(Math.max(a.y - uy, a.lo), a.hi);
+        c.x = Math.min(Math.max(c.x + ux, c.xlo), c.xhi); c.y = Math.min(Math.max(c.y + uy, c.lo), c.hi);
+      }
+  }
+  // A team-mate clears the ball the way its own keeper would - away from its own goal, at the
+  // angle it came off the player - so a deflection is always a help and never an own goal.
+  function mateHits(){
+    for (const m of mates){
+      if (m.cool > 0) continue;
+      const dx = ball.x - m.x, dy = ball.y - m.y, reach = mateR + r;
+      if (dx * dx + dy * dy > reach * reach) continue;
+      if (ball.vx * dx + ball.vy * dy >= 0) continue; // already moving away: don't grab it back
+      const d = Math.hypot(dx, dy) || 1;
+      ball.x = m.x + dx / d * reach; ball.y = m.y + dy / d * reach;
+      hit(m.x, reach * 2, m.side === 'bot' ? -1 : 1, 1, false);
+      m.cool = MATE_COOL;
+      return true;
+    }
+    return false;
+  }
   function update(dt){
     const scale = Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
     padWEff = padW * scale; rowWEff = rowW * scale;
@@ -1225,13 +1356,15 @@ const Pong = (() => {
     if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
     if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x, padW/2), W - padW/2));
+    if (variant === 'squad') moveMates(dt); // team-mates keep milling about between goals too
     if (state !== 'play') return;
 
     ball.x += ball.vx * dt; ball.y += ball.vy * dt; ball.spin += (ball.vx + ball.vy) * dt * .02;
     if (ball.x < r){ ball.x = r; ball.vx = Math.abs(ball.vx); }
     if (ball.x > W - r){ ball.x = W - r; ball.vx = -Math.abs(ball.vx); }
 
-    const rodHit = variant === 'foosball' ? rods() : false; // one bar per frame, so a rod and a keeper can't both fire
+    // one deflection per frame, so a team-mate (or a rod) and a keeper can't both fire
+    const rodHit = variant === 'foosball' ? rods() : variant === 'squad' ? mateHits() : false;
     const b = pads.bot, t = pads.top;
     if (!rodHit && ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
       ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1);
@@ -1301,6 +1434,17 @@ const Pong = (() => {
     g.fillStyle = st ? st.accent : TEAMS[team].trim; g.fill();
     g.lineWidth = 3; g.strokeStyle = 'rgba(18,48,26,.6)'; g.stroke();
   }
+  function drawMate(m){
+    const team = pads[m.side].team, st = STRIPED[team];
+    g.fillStyle = 'rgba(0,0,0,.22)';
+    g.beginPath(); g.ellipse(m.x, m.y + mateR * .55, mateR * .9, mateR * .35, 0, 0, Math.PI * 2); g.fill();
+    g.save(); g.beginPath(); g.arc(m.x, m.y, mateR, 0, Math.PI * 2); g.clip();
+    kitFill(team, m.x - mateR, m.y - mateR, mateR * 2, mateR * 2); g.restore();
+    g.beginPath(); g.arc(m.x, m.y, mateR, 0, Math.PI * 2);
+    g.lineWidth = 3; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
+    g.beginPath(); g.arc(m.x, m.y, mateR * .34, 0, Math.PI * 2);
+    g.fillStyle = st ? st.accent : TEAMS[team].trim; g.fill();
+  }
   function drawStrikers(p){
     for (let k = -1; k <= 1; k++) figure(p.team, p.x + k * rowGap, p.oy, rowWEff, false);
   }
@@ -1308,10 +1452,11 @@ const Pong = (() => {
     g.save();
     g.translate(W - 34, side === 'top' ? H/2 - 36 : H/2 + 36);
     if (side === 'top') g.rotate(Math.PI);
-    g.fillStyle = TEAMS[pads[side].team].main;
+    const tm = pads[side].team;
+    g.fillStyle = TEAMS[tm].main;
     g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill();
-    g.lineWidth = 3; g.strokeStyle = TEAMS[pads[side].team].trim; g.stroke();
-    g.fillStyle = '#fff'; g.font = '800 30px "Baloo 2", "Trebuchet MS", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 3; g.strokeStyle = TEAMS[tm].trim; g.stroke();
+    g.fillStyle = kitInk(tm); g.font = '800 30px "Baloo 2", "Trebuchet MS", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(String(value), 0, 2);
     g.restore();
   }
@@ -1333,6 +1478,7 @@ const Pong = (() => {
       figure(pads.top.team, pads.top.x, pads.top.y, padWEff, true);
       figure(pads.bot.team, pads.bot.x, pads.bot.y, padWEff, true);
     } else {
+      if (variant === 'squad') mates.forEach(drawMate);
       drawPad(pads.top); drawPad(pads.bot);
     }
     drawScore('top', score.top); drawScore('bot', score.bot);
