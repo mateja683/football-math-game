@@ -974,20 +974,36 @@ function showCabinet(){
 }
 
 /* ---------- word banks ---------- */
+// The writing game draws from this bank alone, so it's the big one. Every word has to have
+// an emoji that reads unambiguously on its own - the picture is the whole prompt, and there's
+// no way to show "the" or "did". That, not the word list, is what caps the size here.
 const WORDS3 = [
-  {w:'cat', e:'🐱'}, {w:'dog', e:'🐶'}, {w:'sun', e:'☀️'}, {w:'hat', e:'🎩'}, {w:'pig', e:'🐷'},
-  {w:'fox', e:'🦊'}, {w:'owl', e:'🦉'}, {w:'ant', e:'🐜'}, {w:'cow', e:'🐮'}, {w:'bee', e:'🐝'},
-  {w:'egg', e:'🥚'}, {w:'bus', e:'🚌'}, {w:'bed', e:'🛏️'}, {w:'box', e:'📦'},
-  {w:'van', e:'🚐'}, {w:'hen', e:'🐔'}, {w:'bat', e:'🦇'}, {w:'pen', e:'🖊️'}, {w:'key', e:'🔑'},
-  {w:'car', e:'🚗'}, {w:'web', e:'🕸️'}, {w:'bin', e:'🗑️'}, {w:'map', e:'🗺️'}, {w:'leg', e:'🦵'},
-  {w:'ear', e:'👂'}, {w:'eye', e:'👁️'}
+  // animals
+  {w:'cat', e:'🐱'}, {w:'dog', e:'🐶'}, {w:'pig', e:'🐷'}, {w:'cow', e:'🐮'}, {w:'hen', e:'🐔'},
+  {w:'fox', e:'🦊'}, {w:'owl', e:'🦉'}, {w:'ant', e:'🐜'}, {w:'bee', e:'🐝'}, {w:'bat', e:'🦇'},
+  {w:'rat', e:'🐀'}, {w:'ram', e:'🐏'}, {w:'bug', e:'🐛'}, {w:'fly', e:'🪰'}, {w:'paw', e:'🐾'},
+  // things about the house
+  {w:'bed', e:'🛏️'}, {w:'box', e:'📦'}, {w:'bin', e:'🗑️'}, {w:'bag', e:'👜'}, {w:'cup', e:'☕'},
+  {w:'jar', e:'🫙'}, {w:'tin', e:'🥫'}, {w:'pen', e:'🖊️'}, {w:'key', e:'🔑'}, {w:'map', e:'🗺️'},
+  {w:'pin', e:'📌'}, {w:'net', e:'🥅'}, {w:'axe', e:'🪓'}, {w:'saw', e:'🪚'}, {w:'gem', e:'💎'},
+  // things to wear
+  {w:'hat', e:'🎩'}, {w:'cap', e:'🧢'}, {w:'tie', e:'👔'}, {w:'bow', e:'🎀'},
+  // things to eat
+  {w:'egg', e:'🥚'}, {w:'pie', e:'🥧'}, {w:'nut', e:'🥜'}, {w:'ice', e:'🧊'},
+  // out and about
+  {w:'bus', e:'🚌'}, {w:'van', e:'🚐'}, {w:'car', e:'🚗'}, {w:'hut', e:'🛖'}, {w:'web', e:'🕸️'},
+  {w:'sun', e:'☀️'}, {w:'fog', e:'🌫️'}, {w:'log', e:'🪵'},
+  // bodies and doing things
+  {w:'leg', e:'🦵'}, {w:'ear', e:'👂'}, {w:'eye', e:'👁️'},
+  {w:'run', e:'🏃'}, {w:'ski', e:'🎿'}, {w:'hug', e:'🤗'}, {w:'nap', e:'😴'}, {w:'sad', e:'😢'}
 ];
 const WORDS4 = [
   {w:'frog', e:'🐸'}, {w:'fish', e:'🐟'}, {w:'lion', e:'🦁'}, {w:'bird', e:'🐦'}, {w:'star', e:'⭐'},
   {w:'moon', e:'🌙'}, {w:'book', e:'📖'}, {w:'cake', e:'🎂'}, {w:'duck', e:'🦆'}, {w:'crab', e:'🦀'},
   {w:'kite', e:'🪁'}, {w:'leaf', e:'🍃'}, {w:'tree', e:'🌳'}, {w:'boat', e:'⛵'}
 ];
-const WORDS5 = [
+const WORDS5 = [ // not drawn on at the moment: reading is 3-4 letters, writing is 3
+
   {w:'horse', e:'🐴'}, {w:'sheep', e:'🐑'}, {w:'zebra', e:'🦓'}, {w:'snake', e:'🐍'}, {w:'shark', e:'🦈'},
   {w:'mouse', e:'🐭'}, {w:'whale', e:'🐳'}, {w:'apple', e:'🍎'}, {w:'grape', e:'🍇'}, {w:'clock', e:'🕐'},
   {w:'chair', e:'🪑'}, {w:'plane', e:'✈️'}
@@ -995,6 +1011,10 @@ const WORDS5 = [
 const WORD_ROUND = 8;
 
 /* ---------- reading game ---------- */
+// Pick the length first, then the word: WORDS3 is now much the bigger bank, and picking flat
+// from both would turn the reading game into mostly three-letter words. An even split is what
+// it always was in practice, back when the two banks were the same size.
+const READ_BANKS = [WORDS3, WORDS4];
 const READ_WORDS = [...WORDS3, ...WORDS4];
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizer = null;
@@ -1014,7 +1034,7 @@ function readStart(){
   readSlots(); show('reading'); readNext();
 }
 function readNext(){
-  let w; do { w = pick(READ_WORDS); } while (w.w === RD.lastWord && READ_WORDS.length > 1);
+  let w; do { w = pick(pick(READ_BANKS)); } while (w.w === RD.lastWord && READ_WORDS.length > 1);
   RD.lastWord = w.w; RD.word = w; RD.missed = false;
   $('#readWord').textContent = w.w; $('#readWord').classList.remove('miss');
   $('#micStatus').hidden = true; $('#micStatus').textContent = '';
