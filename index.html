@@ -1371,8 +1371,14 @@ const Pong = (() => {
   const MIN_PAD_SCALE = .5, SHRINK_PER_HIT = .09;
   let fullSpeedStreak = 0, variant = 'classic';
   let rowGap = 0, rowW = 0, rowWEff = 0; // foosball outfield rods
-  const MATES_PER_SIDE = 2, MATE_COOL = .18;
-  let mates = [], mateR = 0;             // three-a-side: two roaming team-mates per side
+  // Three-a-side: one outfield player each on the end of a finger, one AI team-mate each
+  // penned into a strip of its own half, and an AI keeper on each line.
+  const KICK_T = .18, YOU_COOL = .14, MATE_COOL = .38, KICK_LOCK = .28, SAVE_P = .55;
+  let kickLock = 0, lastKicker = null;   // nobody else may challenge a kick until it has travelled
+  let shotId = 0;                        // bumped on every touch: one guess per keeper per shot
+  const ZONE_LO = .14, ZONE_HI = .86;    // the men run between the two penalty areas
+  let mates = [], manR = 0;
+  const men = { top:{side:'top', you:true}, bot:{side:'bot', you:true} };
   const pads = { top:{x:0, team:'red'}, bot:{x:0, team:'blue'} };
   const ball = {x:0, y:0, vx:0, vy:0, spin:0};
   const score = {top:0, bot:0};
@@ -1383,22 +1389,27 @@ const Pong = (() => {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    padW = Math.max(80, W * .28); padWEff = padW; padH = Math.max(16, H * .024);
+    // the three-a-side keeper is narrower: it plays itself, and there's a whole outfield
+    // player in front of it, so a full-width one would leave nothing to shoot at
+    padW = variant === 'squad' ? Math.max(64, W * .22) : Math.max(80, W * .28);
+    padWEff = padW; padH = Math.max(16, H * .024);
     rowGap = W / 3.2; rowW = padW * .34; rowWEff = rowW;
     goalW = W * .46; r = Math.max(12, Math.min(24, Math.min(W, H) * .035));
     pads.top.y = H * .1; pads.bot.y = H * .9;
     pads.top.oy = H * .70; pads.bot.oy = H * .30; // strikers play in the opposition half
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
-    mateDims();
+    squadDims();
   }
-  // Three-a-side keeps the ball slower: there is a lot more to watch, and the deflections
-  // off the team-mates are what should make it interesting, not the pace.
-  const base = () => H * (variant === 'squad' ? .30 : .36);
-  const maxSpeed = () => H * (variant === 'squad' ? .72 : 1.05);
+  const base = () => H * (variant === 'squad' ? .34 : .36);
+  const maxSpeed = () => H * (variant === 'squad' ? 1.00 : 1.05);
+  // The one number three-a-side turns on: a man must run SLOWER than a kicked ball. If he
+  // doesn't, whoever is stood on the ball simply wins it straight back, both players end up
+  // glued to it and nobody can ever score - which is exactly how the first version played.
+  const RUN = () => H * .65;
 
   function serve(dir){
     ball.x = W/2; ball.y = H/2;
-    fullSpeedStreak = 0;
+    fullSpeedStreak = 0; shotId++;
     const s = base(), a = (Math.random() - .5) * 1.0;
     ball.vx = s * Math.sin(a); ball.vy = dir * s * Math.cos(a);
   }
@@ -1426,9 +1437,11 @@ const Pong = (() => {
     makeMates();
     syncControls();
     const how = S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger';
-    const who = variant === 'foosball' ? 'your keeper and your strikers' : 'your keeper';
+    const who = variant === 'foosball' ? 'your keeper and your strikers' : variant === 'squad' ? 'your player' : 'your keeper';
     const title = variant === 'foosball' ? 'Foosball' : variant === 'squad' ? 'Three-a-side' : 'Prize match';
-    const extra = variant === 'squad' ? ' Your two team-mates run about on their own.' : '';
+    const extra = variant !== 'squad' ? ''
+      : (S.controls === 'buttons' ? ' He runs up and down to the ball on his own.' : ' He can run anywhere on the pitch.') +
+        ' Your keeper and your team-mate play by themselves.';
     speak(`${title}! ${how} to move ${who}.${extra} First to three goals wins!`);
     say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}.${extra} First to ${WIN} wins!</p>`);
     const t = tok;
@@ -1473,8 +1486,9 @@ const Pong = (() => {
   }
   // `gain` is how much the touch speeds the ball up; `counts` is whether it feeds the
   // rally counter that shrinks the keepers. A team-mate's deflection does neither.
-  function hit(cx, w, dir, gain = 1.07, counts = true){
-    const speed = Math.min(maxSpeed(), Math.hypot(ball.vx, ball.vy) * gain);
+  function hit(cx, w, dir, gain = 1.07, counts = true, floor = 0){
+    shotId++;
+    const speed = Math.min(maxSpeed(), Math.max(floor, Math.hypot(ball.vx, ball.vy) * gain));
     if (counts && speed >= maxSpeed() - .5) fullSpeedStreak++;
     const off = Math.max(-1, Math.min(1, (ball.x - cx) / (w/2)));
     const a = off * 1.0;
@@ -1498,84 +1512,155 @@ const Pong = (() => {
     }
     return false;
   }
-  /* ----- three-a-side: two team-mates a side, roaming their own half ----- */
+  /* ----- three-a-side: a man on your finger, an AI team-mate, an AI keeper ----- */
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
   function makeMates(){
     mates = [];
     if (variant !== 'squad') return;
     for (const side of ['bot','top'])
-      for (let i = 0; i < MATES_PER_SIDE; i++)
-        mates.push({ side, i, x: W * (i ? .68 : .32), y: 0, rx: 0, ry: 0, wob: 0, cool: 0 });
-    mateDims();
+      mates.push({ side, you:false, x: W/2, y: 0, rx: 0, wob: 0, cool: 0, kick: 0, kdir: 1, phase: 0 });
+    for (const side of ['top','bot'])
+      Object.assign(men[side], { x: W/2, y: H * (side === 'bot' ? .68 : .32), tx: W/2, ty: H * (side === 'bot' ? .68 : .32),
+        cool: 0, kick: 0, kdir: 1, phase: 0 });
+    ['top','bot'].forEach(k => { pads[k].guess = W/2; pads[k].seen = -1; });
+    kickLock = 0; lastKicker = null;
+    squadDims();
   }
-  function mateDims(){
-    if (!mates.length) return;
-    mateR = Math.max(13, Math.min(28, Math.min(W, H) * .040));
-    const edge = mateR * 1.4;
+  function squadDims(){
+    if (variant !== 'squad') return;
+    manR = Math.max(15, Math.min(32, Math.min(W, H) * .046));
     for (const m of mates){
-      m.lo = m.side === 'bot' ? H * .54 : H * .18;
-      m.hi = m.side === 'bot' ? H * .82 : H * .46;
-      m.xlo = Math.max(edge, m.i ? W * .42 : W * .06);
-      m.xhi = Math.min(W - edge, m.i ? W * .94 : W * .58);
-      if (m.xhi < m.xlo) m.xhi = m.xlo = W / 2;
-      m.x = Math.min(Math.max(m.x, m.xlo), m.xhi);
-      m.y = Math.min(Math.max(m.y || (m.lo + m.hi) / 2, m.lo), m.hi);
+      m.rad = manR;
+      m.lo = m.side === 'bot' ? H * .56 : H * .16;   // its strip of its own half, and no further
+      m.hi = m.side === 'bot' ? H * .84 : H * .44;
+      m.x = clamp(m.x || W/2, manR, W - manR);
+      m.y = clamp(m.y || (m.lo + m.hi) / 2, m.lo, m.hi);
+    }
+    for (const side of ['top','bot']){
+      const m = men[side];
+      m.rad = manR;
+      m.x = m.tx = clamp(m.x || W/2, manR, W - manR);
+      m.y = m.ty = clamp(m.y || H/2, H * ZONE_LO, H * ZONE_HI);
     }
   }
-  // Half sense, half wander: each team-mate keeps to its own strip of its own half, goes to
-  // meet the ball when it comes in, drifts home when it doesn't, and re-rolls a random
-  // offset every second or so, so it never runs a straight line to the ball.
+  // Your man goes where your finger is, at a running pace rather than instantly - teleporting
+  // onto the ball would make him unbeatable, and the run is half the game.
+  function aim(side, x, y){ const m = men[side]; m.tx = x; m.ty = y; }
+  // With arrow buttons there are only two of them per player, so they steer left and right
+  // and the man closes on the ball up and down by himself.
+  function moveMen(dt){
+    const run = RUN(), ks = W * .95 * dt;
+    for (const side of ['top','bot']){
+      const m = men[side];
+      m.cool = Math.max(0, m.cool - dt); m.kick = Math.max(0, m.kick - dt);
+      if (S.controls === 'buttons'){
+        if (keys.has(side === 'top' ? 'a' : 'ArrowLeft')) m.tx -= ks;
+        if (keys.has(side === 'top' ? 'd' : 'ArrowRight')) m.tx += ks;
+        m.ty = ball.y;
+      }
+      m.tx = clamp(m.tx, manR, W - manR);
+      m.ty = clamp(m.ty, H * ZONE_LO, H * ZONE_HI);
+      const dx = m.tx - m.x, dy = m.ty - m.y, d = Math.hypot(dx, dy);
+      if (d < 1) continue;
+      const step = Math.min(run * dt, d);
+      m.x += dx / d * step; m.y += dy / d * step;
+      m.phase += step / (manR * .5);
+    }
+    const a = men.top, c = men.bot, gap = manR * 2.1;   // and they can't stand in each other
+    const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy) || 1;
+    if (d < gap){
+      const push = (gap - d) / 2, ux = dx / d * push, uy = dy / d * push;
+      a.x = clamp(a.x - ux, manR, W - manR); a.y = clamp(a.y - uy, H * ZONE_LO, H * ZONE_HI);
+      c.x = clamp(c.x + ux, manR, W - manR); c.y = clamp(c.y + uy, H * ZONE_LO, H * ZONE_HI);
+    }
+  }
+  // The team-mate only bothers with the ball inside its own strip, and it's slower than the
+  // ball is - it's there to help, not to be a wall.
   function moveMates(dt){
     for (const m of mates){
-      m.cool = Math.max(0, m.cool - dt);
+      m.cool = Math.max(0, m.cool - dt); m.kick = Math.max(0, m.kick - dt);
       m.wob -= dt;
-      if (m.wob <= 0){
-        m.wob = .6 + Math.random() * 1.1;
-        m.rx = (Math.random() - .5) * W * .18;
-        m.ry = (Math.random() - .5) * (m.hi - m.lo) * .8;
-      }
-      const mine = m.side === 'bot' ? ball.y > H * .5 : ball.y < H * .5;
-      const tx = Math.min(Math.max((mine ? ball.x : (m.xlo + m.xhi) / 2) + m.rx, m.xlo), m.xhi);
-      const ty = Math.min(Math.max((mine ? ball.y : (m.lo + m.hi) / 2) + m.ry, m.lo), m.hi);
+      if (m.wob <= 0){ m.wob = .7 + Math.random() * 1.2; m.rx = (Math.random() - .5) * W * .22; }
+      const mine = ball.y > m.lo && ball.y < m.hi;
+      const tx = clamp((mine ? ball.x : W/2) + m.rx, manR, W - manR);
+      const ty = clamp(mine ? ball.y : (m.lo + m.hi) / 2, m.lo, m.hi);
       const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
       if (d < 1) continue;
-      const step = Math.min(H * (mine ? .42 : .26) * dt, d);
+      const step = Math.min(H * (mine ? .40 : .22) * dt, d);
       m.x += dx / d * step; m.y += dy / d * step;
+      m.phase += step / (manR * .5);
     }
-    for (let i = 0; i < mates.length; i++)          // team-mates don't stand on each other
-      for (let j = i + 1; j < mates.length; j++){
-        const a = mates[i], c = mates[j];
-        if (a.side !== c.side) continue;
-        const dx = c.x - a.x, dy = c.y - a.y, gap = mateR * 2.3, d = Math.hypot(dx, dy) || 1;
-        if (d >= gap) continue;
-        const push = (gap - d) / 2, ux = dx / d * push, uy = dy / d * push;
-        a.x = Math.min(Math.max(a.x - ux, a.xlo), a.xhi); a.y = Math.min(Math.max(a.y - uy, a.lo), a.hi);
-        c.x = Math.min(Math.max(c.x + ux, c.xlo), c.xhi); c.y = Math.min(Math.max(c.y + uy, c.lo), c.hi);
-      }
   }
-  // A team-mate clears the ball the way its own keeper would - away from its own goal, at the
-  // angle it came off the player - so a deflection is always a help and never an own goal.
-  function mateHits(){
-    for (const m of mates){
+  // The keepers play themselves. They deliberately do NOT track the ball: a keeper quick enough
+  // to follow it saves everything, which is exactly how this game used to end 0-0 forever.
+  // Instead each keeper commits to one guess per shot, right or wrong, like the penalty keeper.
+  function planSave(p, gy){
+    p.seen = shotId;
+    let x = ball.x + ball.vx * (Math.abs(gy - ball.y) / (Math.abs(ball.vy) || 1));
+    const lo = r, hi = W - r, span = 2 * (hi - lo);   // fold the side walls in, so a shot off one is still read
+    const t = ((x - lo) % span + span) % span;
+    x = lo + (t > hi - lo ? span - t : t);
+    p.guess = Math.random() < SAVE_P ? x
+      : x + (Math.random() < .5 ? -1 : 1) * (padW * .9 + Math.random() * padW * .8);
+  }
+  function moveKeepers(dt){
+    for (const side of ['top','bot']){
+      const p = pads[side], gy = side === 'top' ? 0 : H;
+      const coming = side === 'top' ? ball.vy < -1 : ball.vy > 1;
+      if (coming && p.seen !== shotId) planSave(p, gy);
+      const to = coming ? p.guess : W/2 + (ball.x - W/2) * .35;   // otherwise it just covers the middle
+      const sp = H * (coming ? .70 : .30) * dt;
+      p.x = clamp(p.x + clamp(to - p.x, -sp, sp), padW/2, W - padW/2);
+    }
+  }
+  // Your own man doesn't just deflect the ball the way it happened to come off him - he aims.
+  // Running onto a loose ball and having it squirt off at forty degrees is luck, not a game, so
+  // the boot is blended between where he caught it and the goal he's attacking, and the closer
+  // he is to that goal the more it's the goal. He still can't kick it backwards.
+  function shoot(m){
+    const dir = m.side === 'bot' ? -1 : 1, gy = dir < 0 ? 0 : H;
+    const near = 1 - Math.min(1, Math.abs(gy - ball.y) / (H * .6));     // 1 on the line, 0 out wide
+    const aim = Math.atan2(W/2 - ball.x, Math.max(H * .12, Math.abs(gy - ball.y)));
+    const off = clamp((ball.x - m.x) / (manR + r), -1, 1);
+    const a = clamp(aim * (.4 + .6 * near) + off * (1 - .55 * near), -1, 1);
+    const speed = maxSpeed() * .92;
+    ball.vx = speed * Math.sin(a); ball.vy = dir * speed * Math.cos(a);
+    shotId++; thud();
+  }
+  // Every outfield player knocks the ball away from their own goal, so no touch is ever an own
+  // goal. Your own man shoots (and can dribble, on a short cooldown); a team-mate only nudges.
+  function outfieldHits(){
+    for (const m of [men.top, men.bot, ...mates]){
       if (m.cool > 0) continue;
-      const dx = ball.x - m.x, dy = ball.y - m.y, reach = mateR + r;
+      if (kickLock > 0 && m !== lastKicker) continue;
+      const reach = manR + r, dx = ball.x - m.x, dy = ball.y - m.y;
       if (dx * dx + dy * dy > reach * reach) continue;
-      if (ball.vx * dx + ball.vy * dy >= 0) continue; // already moving away: don't grab it back
+      if (!m.you && ball.vx * dx + ball.vy * dy >= 0) continue; // already leaving: leave it
       const d = Math.hypot(dx, dy) || 1;
       ball.x = m.x + dx / d * reach; ball.y = m.y + dy / d * reach;
-      hit(m.x, reach * 2, m.side === 'bot' ? -1 : 1, 1, false);
-      m.cool = MATE_COOL;
+      if (m.you) shoot(m);
+      else hit(m.x, reach * 2, m.side === 'bot' ? -1 : 1, 1, false, base() * .9);
+      m.cool = m.you ? YOU_COOL : MATE_COOL;
+      kickLock = KICK_LOCK; lastKicker = m;
+      m.kick = KICK_T; m.kdir = ball.x >= m.x ? 1 : -1;
       return true;
     }
     return false;
   }
   function update(dt){
-    const scale = Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
+    // the keeper-shrinking rally counter is for the keeper-vs-keeper games; in three-a-side
+    // nobody is steering a keeper, so shrinking one would just be unfair
+    const scale = variant === 'squad' ? 1 : Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
     padWEff = padW * scale; rowWEff = rowW * scale;
-    const ks = W * (S.controls === 'buttons' ? 1.05 : 1.3) * dt;
-    if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
-    if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
-    ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x, padW/2), W - padW/2));
-    if (variant === 'squad') moveMates(dt); // team-mates keep milling about between goals too
+    if (variant === 'squad'){
+      kickLock = Math.max(0, kickLock - dt);
+      moveMen(dt); moveMates(dt); moveKeepers(dt); // everyone keeps moving between goals too
+    } else {
+      const ks = W * (S.controls === 'buttons' ? 1.05 : 1.3) * dt;
+      if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
+      if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
+      ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x, padW/2), W - padW/2));
+    }
     if (state !== 'play') return;
 
     ball.x += ball.vx * dt; ball.y += ball.vy * dt; ball.spin += (ball.vx + ball.vy) * dt * .02;
@@ -1583,7 +1668,7 @@ const Pong = (() => {
     if (ball.x > W - r){ ball.x = W - r; ball.vx = -Math.abs(ball.vx); }
 
     // one deflection per frame, so a team-mate (or a rod) and a keeper can't both fire
-    const rodHit = variant === 'foosball' ? rods() : variant === 'squad' ? mateHits() : false;
+    const rodHit = variant === 'foosball' ? rods() : variant === 'squad' ? outfieldHits() : false;
     const b = pads.bot, t = pads.top;
     if (!rodHit && ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
       ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1);
@@ -1653,16 +1738,42 @@ const Pong = (() => {
     g.fillStyle = st ? st.accent : TEAMS[team].trim; g.fill();
     g.lineWidth = 3; g.strokeStyle = 'rgba(18,48,26,.6)'; g.stroke();
   }
-  function drawMate(m){
+  /* ----- a small 2-D footballer: legs that swing as he runs, and one that swings out to kick ----- */
+  function drawMan(m){
     const team = pads[m.side].team, st = PATTERNED[team];
+    const ink = st ? st.dark : TEAMS[team].trim;
+    const rad = m.rad || manR, bw = rad * 1.2, bh = rad * 1.3, hr = rad * .5;
+    const sw = Math.sin(m.phase) * rad * .5;        // how far the legs are swung apart
+    const by = m.y - bh * .42;
     g.fillStyle = 'rgba(0,0,0,.22)';
-    g.beginPath(); g.ellipse(m.x, m.y + mateR * .55, mateR * .9, mateR * .35, 0, 0, Math.PI * 2); g.fill();
-    g.save(); g.beginPath(); g.arc(m.x, m.y, mateR, 0, Math.PI * 2); g.clip();
-    kitFill(team, m.x - mateR, m.y - mateR, mateR * 2, mateR * 2); g.restore();
-    g.beginPath(); g.arc(m.x, m.y, mateR, 0, Math.PI * 2);
-    g.lineWidth = 3; g.strokeStyle = st ? st.dark : TEAMS[team].trim; g.stroke();
-    g.beginPath(); g.arc(m.x, m.y, mateR * .34, 0, Math.PI * 2);
-    g.fillStyle = st ? st.accent : TEAMS[team].trim; g.fill();
+    g.beginPath(); g.ellipse(m.x, m.y + rad, rad * .8, rad * .28, 0, 0, Math.PI * 2); g.fill();
+    if (m.you){ // a ring at his feet, so each player can see which one is theirs
+      g.strokeStyle = '#f5c400'; g.lineWidth = Math.max(2.5, rad * .16);
+      g.beginPath(); g.ellipse(m.x, m.y + rad, rad * .92, rad * .34, 0, 0, Math.PI * 2); g.stroke();
+    }
+    g.lineCap = 'round';
+    g.strokeStyle = '#2b2b2b'; g.lineWidth = rad * .3;   // legs
+    [-1, 1].forEach(k => {
+      g.beginPath(); g.moveTo(m.x + k * bw * .25, m.y + bh * .28);
+      if (m.kick > 0 && k === m.kdir) g.lineTo(m.x + k * bw * 1.15, m.y + bh * .55);
+      else g.lineTo(m.x + k * bw * .25 + k * sw, m.y + bh * .80);
+      g.stroke();
+    });
+    g.strokeStyle = ink; g.lineWidth = rad * .22;        // arms
+    [-1, 1].forEach(k => {
+      g.beginPath(); g.moveTo(m.x + k * bw * .38, m.y - bh * .10);
+      g.lineTo(m.x + k * bw * .66, m.y + bh * .22 - k * sw * .5); g.stroke();
+    });
+    const bx = m.x - bw / 2;                             // shirt
+    g.save(); rr(bx, by, bw, bh, rad * .34); g.clip(); kitFill(team, bx, by, bw, bh); g.restore();
+    rr(bx, by, bw, bh, rad * .34); g.lineWidth = 2.5; g.strokeStyle = ink; g.stroke();
+    g.beginPath(); g.arc(m.x, by - hr * .78, hr, 0, Math.PI * 2);   // head
+    g.fillStyle = '#f1c79b'; g.fill();
+    g.lineWidth = 2.5; g.strokeStyle = 'rgba(18,48,26,.65)'; g.stroke();
+    if (m.kick > 0){ // a burst of white where the boot met the ball, spreading as it fades
+      g.strokeStyle = `rgba(255,255,255,${m.kick * 2.6})`; g.lineWidth = 3;
+      g.beginPath(); g.arc(m.x + m.kdir * bw, m.y + bh * .44, rad * .5 * (1.7 - m.kick * 3), 0, Math.PI * 2); g.stroke();
+    }
   }
   function drawStrikers(p){
     for (let k = -1; k <= 1; k++) figure(p.team, p.x + k * rowGap, p.oy, rowWEff, false);
@@ -1697,8 +1808,12 @@ const Pong = (() => {
       figure(pads.top.team, pads.top.x, pads.top.y, padWEff, true);
       figure(pads.bot.team, pads.bot.x, pads.bot.y, padWEff, true);
     } else {
-      if (variant === 'squad') mates.forEach(drawMate);
-      drawPad(pads.top); drawPad(pads.bot);
+      if (variant === 'squad'){
+        mates.forEach(drawMan);
+        drawMan(men.top); drawMan(men.bot);   // yours on top of the AI, so he's never hidden
+        figure(pads.top.team, pads.top.x, pads.top.y, padWEff, true);
+        figure(pads.bot.team, pads.bot.x, pads.bot.y, padWEff, true);
+      } else { drawPad(pads.top); drawPad(pads.bot); }
     }
     drawScore('top', score.top); drawScore('bot', score.bot);
     g.save(); g.translate(ball.x, ball.y); g.rotate(ball.spin);
@@ -1715,8 +1830,11 @@ const Pong = (() => {
 
   function syncControls(){
     const on = S.controls === 'buttons';
+    const moves = variant === 'squad' ? 'player' : 'keeper';
     $$('.pbtn').forEach(b => {
       b.hidden = !on;
+      const top = b.classList.contains('tl') || b.classList.contains('tr');
+      b.setAttribute('aria-label', `${top ? 'Top' : 'Bottom'} ${moves} ${b.dataset.key.includes('Left') || b.dataset.key === 'a' ? 'left' : 'right'}`);
       const team = b.classList.contains('tl') || b.classList.contains('tr') ? pads.top.team : pads.bot.team;
       Object.keys(TEAMS).forEach(t => b.classList.toggle(t, t === team));
     });
@@ -1734,13 +1852,24 @@ const Pong = (() => {
   });
   $('#pmode').onclick = () => { S.controls = S.controls === 'buttons' ? 'slide' : 'buttons'; save(); syncStart(); syncControls(); };
 
+  // In three-a-side a man can be anywhere on the pitch, so a touch can't be assigned by the
+  // half it lands in: it goes to whichever free player is nearest to it.
+  function grab(x, y){
+    const taken = [...touches.values()];
+    const free = ['top','bot'].filter(s => !taken.includes(s));
+    if (!free.length) return null;
+    if (free.length === 1) return free[0];
+    return Math.hypot(men.top.x - x, men.top.y - y) <= Math.hypot(men.bot.x - x, men.bot.y - y) ? 'top' : 'bot';
+  }
+  function steer(side, x, y){ if (variant === 'squad') aim(side, x, y); else pads[side].x = x; }
   cv.addEventListener('pointerdown', e => {
     if (S.controls === 'buttons') return;
-    const side = e.clientY < H/2 ? 'top' : 'bot';
-    touches.set(e.pointerId, side); pads[side].x = e.clientX;
+    const side = variant === 'squad' ? grab(e.clientX, e.clientY) : (e.clientY < H/2 ? 'top' : 'bot');
+    if (!side) return;
+    touches.set(e.pointerId, side); steer(side, e.clientX, e.clientY);
     try { cv.setPointerCapture(e.pointerId); } catch(err) {}
   });
-  cv.addEventListener('pointermove', e => { if (S.controls === 'buttons') return; const s = touches.get(e.pointerId); if (s) pads[s].x = e.clientX; });
+  cv.addEventListener('pointermove', e => { if (S.controls === 'buttons') return; const s = touches.get(e.pointerId); if (s) steer(s, e.clientX, e.clientY); });
   ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, e => touches.delete(e.pointerId)));
   addEventListener('keydown', e => { if (!S.locked && !$('#pong').hidden){ keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
