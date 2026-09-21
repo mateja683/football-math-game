@@ -1373,7 +1373,7 @@ const Pong = (() => {
   let rowGap = 0, rowW = 0, rowWEff = 0; // foosball outfield rods
   // Three-a-side: one outfield player each on the end of a finger, one AI team-mate each
   // penned into a strip of its own half, and an AI keeper on each line.
-  const KICK_T = .18, YOU_COOL = .14, MATE_COOL = .38, KICK_LOCK = .28, SAVE_P = .55;
+  const KICK_T = .18, YOU_COOL = .14, MATE_COOL = .38, KICK_LOCK = .28, DIVE_SPREAD = .70;
   let kickLock = 0, lastKicker = null;   // nobody else may challenge a kick until it has travelled
   let shotId = 0;                        // bumped on every touch: one guess per keeper per shot
   const ZONE_LO = .14, ZONE_HI = .86;    // the men run between the two penalty areas
@@ -1400,12 +1400,27 @@ const Pong = (() => {
     ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x || W/2, padW/2), W - padW/2));
     squadDims();
   }
-  const base = () => H * (variant === 'squad' ? .34 : .36);
-  const maxSpeed = () => H * (variant === 'squad' ? 1.00 : 1.05);
+  // Three-a-side builds: the first minute is gentle enough for a four-year-old to follow, and
+  // the pace comes up over the match rather than arriving at full speed off the kick-off.
+  // `matchT` is seconds of actual play - it doesn't reset between goals, so the game heats up
+  // across the whole match. That, with the keepers thinning on their own slower clock
+  // (KEEP_SHRINK), is what brings a match home inside a minute or two instead of grinding on.
+  const RAMP = 70, PACE_FROM = .52;            // ball: PACE_FROM of full speed, up to full over RAMP seconds
+  const DRAG = .62, ROLL = .35;                // the ball loses pace after a kick, down to ROLL of a serve
+  // Keepers hold their full width for the opening spell and then narrow away. That shape is
+  // what keeps a match inside a minute or two: holding early stops a runaway 3-0 in the first
+  // half-minute, and narrowing afterwards stops a tight game dragging. All three are in
+  // seconds of actual play, which is roughly two thirds of the clock on the wall.
+  const KEEP_HOLD = 35, KEEP_SHRINK = 50, KEEP_MIN = .22;
+  let matchT = 0;
+  const pace = () => variant === 'squad' ? PACE_FROM + (1 - PACE_FROM) * Math.min(1, matchT / RAMP) : 1;
+  const maxSpeed = () => H * (variant === 'squad' ? 1.00 * pace() : 1.05);
+  const base = () => variant === 'squad' ? maxSpeed() * .45 : H * .36;
   // The one number three-a-side turns on: a man must run SLOWER than a kicked ball. If he
   // doesn't, whoever is stood on the ball simply wins it straight back, both players end up
   // glued to it and nobody can ever score - which is exactly how the first version played.
-  const RUN = () => H * .65;
+  // Defining it as a fraction of the ball's speed is what keeps that true as the pace ramps.
+  const RUN = () => maxSpeed() * .68;
 
   function serve(dir){
     ball.x = W/2; ball.y = H/2;
@@ -1431,7 +1446,7 @@ const Pong = (() => {
     variant = (v === 'foosball' || v === 'squad') ? v : 'classic';
     after = cb; tok++; hush();
     pads.bot.team = S.team; pads.top.team = awayTeam();
-    score.top = score.bot = 0;
+    score.top = score.bot = 0; matchT = 0;
     show('pong'); audio(); dims();
     pads.top.x = pads.bot.x = W/2;
     makeMates();
@@ -1593,15 +1608,18 @@ const Pong = (() => {
   }
   // The keepers play themselves. They deliberately do NOT track the ball: a keeper quick enough
   // to follow it saves everything, which is exactly how this game used to end 0-0 forever.
-  // Instead each keeper commits to one guess per shot, right or wrong, like the penalty keeper.
+  // Instead each keeper dives once per shot, at where the ball is going but never exactly at it.
+  // Whether that's a save is then just how much of the goal he still covers - which is what
+  // makes thinning him over the match the thing that brings the game to an end, and means you
+  // can watch it happening. DIVE_SPREAD is measured against his full width, not his current
+  // one, so the dives don't get tidier as he shrinks.
   function planSave(p, gy){
     p.seen = shotId;
     let x = ball.x + ball.vx * (Math.abs(gy - ball.y) / (Math.abs(ball.vy) || 1));
     const lo = r, hi = W - r, span = 2 * (hi - lo);   // fold the side walls in, so a shot off one is still read
     const t = ((x - lo) % span + span) % span;
     x = lo + (t > hi - lo ? span - t : t);
-    p.guess = Math.random() < SAVE_P ? x
-      : x + (Math.random() < .5 ? -1 : 1) * (padW * .9 + Math.random() * padW * .8);
+    p.guess = x + (Math.random() * 2 - 1) * padW * DIVE_SPREAD;
   }
   function moveKeepers(dt){
     for (const side of ['top','bot']){
@@ -1610,7 +1628,7 @@ const Pong = (() => {
       if (coming && p.seen !== shotId) planSave(p, gy);
       const to = coming ? p.guess : W/2 + (ball.x - W/2) * .35;   // otherwise it just covers the middle
       const sp = H * (coming ? .70 : .30) * dt;
-      p.x = clamp(p.x + clamp(to - p.x, -sp, sp), padW/2, W - padW/2);
+      p.x = clamp(p.x + clamp(to - p.x, -sp, sp), padWEff/2, W - padWEff/2);
     }
   }
   // Your own man doesn't just deflect the ball the way it happened to come off him - he aims.
@@ -1650,7 +1668,12 @@ const Pong = (() => {
   function update(dt){
     // the keeper-shrinking rally counter is for the keeper-vs-keeper games; in three-a-side
     // nobody is steering a keeper, so shrinking one would just be unfair
-    const scale = variant === 'squad' ? 1 : Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
+    // Keepers narrow as the match wears on. In the keeper-vs-keeper games that's a rally
+    // counter breaking a stalemate; in three-a-side it's a clock, so the match always comes
+    // to an end without the ball ever having to get frantic.
+    const scale = variant === 'squad'
+      ? Math.max(KEEP_MIN, Math.min(1, 1 - (matchT - KEEP_HOLD) / KEEP_SHRINK))
+      : Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
     padWEff = padW * scale; rowWEff = rowW * scale;
     if (variant === 'squad'){
       kickLock = Math.max(0, kickLock - dt);
@@ -1662,6 +1685,20 @@ const Pong = (() => {
       ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x, padW/2), W - padW/2));
     }
     if (state !== 'play') return;
+    if (variant === 'squad'){
+      matchT += dt;
+      // The ball slows after a kick instead of pinging about at one speed forever. Three things
+      // come out of this, and the game doesn't work without it: a four-year-old can catch a ball
+      // that's losing pace, a team-mate's clearance dies in midfield instead of flying the length
+      // of the pitch and scoring (half of all goals used to be last-touched by an AI), and a shot
+      // has to be taken from somewhere sensible to still have legs when it arrives. It never
+      // stops dead - it always keeps trundling, so the ball can't strand itself out of reach.
+      const sp = Math.hypot(ball.vx, ball.vy), floor = base() * ROLL;
+      if (sp > floor){
+        const k = Math.max(floor / sp, Math.pow(DRAG, dt));
+        ball.vx *= k; ball.vy *= k;
+      }
+    }
 
     ball.x += ball.vx * dt; ball.y += ball.vy * dt; ball.spin += (ball.vx + ball.vy) * dt * .02;
     if (ball.x < r){ ball.x = r; ball.vx = Math.abs(ball.vx); }
