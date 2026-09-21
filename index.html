@@ -50,6 +50,14 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   display:flex;flex-direction:column;align-items:center;font-size:14px;font-weight:700;line-height:1.15;text-align:center}
 .team svg{width:clamp(54px,17vw,78px);height:auto}
 .team[aria-pressed="true"]{background:var(--glass2);border-color:var(--chalk)}
+/* the two-kit summary that stands in for the full grid on the home and maths screens */
+.teambar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.teampick{background:var(--glass);border:3px solid rgba(255,255,255,.35);border-radius:24px;padding:8px 6px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:700;line-height:1.15;text-align:center}
+.teampick .who{font-size:15px;opacity:.85}
+.teampick svg{width:clamp(52px,16vw,74px);height:auto}
+.teampick .tname{font-size:16px}
+.teampick:active{transform:translateY(3px)}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
 .chip{padding:8px 18px;border-radius:999px;background:var(--glass);border:2px solid rgba(255,255,255,.35);
   font-size:20px;font-weight:700}
@@ -255,7 +263,12 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
     <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
   </div>
+
+  <h2 class="label">Teams</h2>
+  <div class="teambar" id="homeTeams"></div>
+
   <div class="spacer"></div>
+  <button class="prizebtn" id="goPrize">⚽ Prize games</button>
   <button class="prizebtn" id="goCabinet">🏆 Trophy cabinet</button>
 </main>
 
@@ -276,14 +289,22 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <div class="spacer"></div>
 </main>
 
+<!-- TEAM PICKER (home or away, from either the menu or the maths screen) -->
+<main class="app" id="teams" hidden>
+  <div class="bar"><button class="iconbtn" id="teamsBack" aria-label="Back">←</button></div>
+  <h1 class="label" id="teamsTitle" style="font-size:30px;text-align:center;margin:2px 0 10px">Pick your team</h1>
+  <div class="teams" id="teamGrid"></div>
+  <div class="spacer"></div>
+</main>
+
 <!-- START -->
 <main class="app" id="start" hidden>
   <div class="bar"><button class="iconbtn" id="toCategory" aria-label="Back to game categories">←</button></div>
   <h1 class="title">Goal<br>Maths</h1>
   <p class="lede">Get the answer right to score. Ten questions makes a match. Get nine or more right first time to win the prize match.</p>
 
-  <h2 class="label">Pick your team</h2>
-  <div class="teams" id="teamGrid"></div>
+  <h2 class="label">Teams</h2>
+  <div class="teambar" id="startTeams"></div>
 
   <h2 class="label">Games</h2>
   <div class="chips">
@@ -368,13 +389,13 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <p id="wordEndMsg"></p>
   <button class="big" id="wordEndAgain">Play again</button>
   <button class="prizebtn" id="wordPrize" hidden>🏆 Play the prize match</button>
-  <button class="plain" id="wordEndBack">Back to categories</button>
+  <button class="plain" id="wordEndBack">Back to the menu</button>
 </main>
 
 <!-- PLAY -->
 <main class="app" id="play" hidden>
   <div class="bar">
-    <button class="iconbtn" id="home" aria-label="Back to team choice">🏠</button>
+    <button class="iconbtn" id="home" aria-label="Back to the menu">🏠</button>
     <div class="slots" id="slots" aria-label="Goals scored"></div>
     <button class="iconbtn" id="again" aria-label="Say the question again">🔊</button>
   </div>
@@ -398,7 +419,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <p id="endMsg">Brilliant playing!</p>
   <button class="big" id="replay">Play again</button>
   <button class="prizebtn" id="prizeEnd" hidden>🏆 Play the prize match</button>
-  <button class="plain" id="change">Change team or game</button>
+  <button class="plain" id="change">Back to the menu</button>
 </main>
 
 <!-- PRIZE UNLOCKED -->
@@ -457,6 +478,10 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Defined up here, not down with the questions: the team bar renders at load and reaches
+// other() -> pick() before the script has run to the bottom.
+const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
 const ROUND_LEN = 10;
 const PRIZE_THRESHOLD = ROUND_LEN - 1;
 const prizeEarned = (hits, total) => hits >= total - 1; // perfect, or perfect but one
@@ -468,6 +493,7 @@ let saved = {};
 try { saved = JSON.parse(localStorage.getItem('goalmaths') || '{}') || {}; } catch(e) {}
 const S = {
   team: saved.team || 'blue',
+  away: saved.away || '',
   allGames: saved.allGames !== false,
   modes: Array.isArray(saved.modes) && saved.modes.length ? saved.modes : ['count','add'],
   voice: saved.voice !== false,
@@ -478,7 +504,7 @@ const S = {
   keepyBest: saved.keepyBest || 0,
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // Club names label the kits, but the kits themselves are still colours only - no crests,
@@ -536,6 +562,12 @@ const other = t => {
   const far = keys.filter(k => TEAMS[k].fam !== fam);
   return pick(far.length ? far : keys);
 };
+// The grown-up's kit. Chosen on the menu screen; if it has never been set (or somehow
+// matches the child's) a contrasting one is rolled once and kept.
+function awayTeam(){
+  if (!TEAMS[S.away] || S.away === S.team){ S.away = other(S.team); save(); }
+  return S.away;
+}
 const teamName = t => TEAMS[t].name;
 const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not what's on screen
 (function kitStyles(){
@@ -636,7 +668,7 @@ function thud(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['category','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','teams','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#mini').hidden = id !== 'mini';
   $('#prizeEnd').hidden = S.prizes < 1;
@@ -660,7 +692,8 @@ $('#goWriting').onclick = () => writeStart();
 $('#toCategory').onclick = () => show('category');
 $('#wordEndAgain').onclick = () => wordEndReplay && wordEndReplay();
 $('#wordEndBack').onclick = () => show('category');
-$('#wordPrize').onclick = () => usePrize(() => show('wordEnd'));
+$('#wordPrize').onclick = () => usePrize(toMenu, () => show('wordEnd'));
+const toMenu = () => show('category');
 function wordRoundDone(kind, hits, replay){
   const done = () => wordEnd(kind, hits, replay);
   if (prizeEarned(hits, WORD_ROUND)){ S.prizes++; save(); prizeUnlocked(hits, WORD_ROUND, done); }
@@ -681,9 +714,35 @@ function wordEnd(kind, hits, replay){
 let wordEndReplay = null;
 
 /* ---------- start screen ---------- */
+/* ---------- teams: home is the child's, away is the grown-up's ---------- */
+// One grid on its own screen serves both sides; the menu and the maths screen each show a
+// two-kit summary bar that opens it.
 $('#teamGrid').innerHTML = Object.keys(TEAMS).map(t =>
   `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${TEAMS[t].name}</button>`).join('');
-$$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => { S.team = b.dataset.team; save(); syncStart(); }; });
+$$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => chooseTeam(b.dataset.team); });
+let teamSide = 'home', teamsBack = 'category';
+function renderTeamBar(host){
+  const rows = [['home', 'Home — you', S.team], ['away', 'Away — grown-up', awayTeam()]];
+  host.innerHTML = rows.map(([side, who, t]) =>
+    `<button class="teampick" data-side="${side}"><span class="who">${who}</span>${shirt(t)}<span class="tname">${TEAMS[t].name}</span></button>`).join('');
+  host.querySelectorAll('.teampick').forEach(b =>
+    b.onclick = () => openTeams(b.dataset.side, host.id === 'startTeams' ? 'start' : 'category'));
+}
+function renderTeamBars(){ renderTeamBar($('#homeTeams')); renderTeamBar($('#startTeams')); }
+function openTeams(side, back){
+  teamSide = side; teamsBack = back || 'category';
+  $('#teamsTitle').textContent = side === 'home' ? 'Pick your team' : "Pick the grown-up's team";
+  const cur = side === 'home' ? S.team : awayTeam();
+  $$('.team').forEach(b => b.setAttribute('aria-pressed', b.dataset.team === cur));
+  show('teams');
+}
+// The two sides must never wear the same kit, so picking the other player's swaps them over.
+function chooseTeam(t){
+  if (teamSide === 'home'){ if (S.away === t) S.away = S.team; S.team = t; }
+  else { if (S.team === t) S.team = S.away; S.away = t; }
+  save(); renderTeamBars(); show(teamsBack);
+}
+$('#teamsBack').onclick = () => show(teamsBack);
 $('#allGames').onclick = () => { S.allGames = !S.allGames; save(); syncStart(); };
 $$('.mode').forEach(b => b.onclick = () => {
   const m = b.dataset.mode;
@@ -695,7 +754,6 @@ $$('.mode').forEach(b => b.onclick = () => {
 $('#voice').onclick = () => { S.voice = !S.voice; save(); syncStart(); };
 $$('#controls .chip').forEach(b => b.onclick = () => { S.controls = b.dataset.c; save(); syncStart(); });
 function syncStart(){
-  $$('.team').forEach(b => b.setAttribute('aria-pressed', b.dataset.team === S.team));
   $('#allGames').setAttribute('aria-pressed', S.allGames);
   $('#modePicker').hidden = S.allGames;
   $$('.mode').forEach(b => b.setAttribute('aria-pressed', S.modes.includes(b.dataset.mode)));
@@ -703,7 +761,7 @@ function syncStart(){
   $$('#controls .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === S.controls));
   $('#voice').textContent = S.voice ? 'Read questions out loud' : 'Voice off';
 }
-syncStart(); show('category');
+syncStart(); renderTeamBars(); show('category');
 
 function kickoff(){
   if (S.locked) return;
@@ -713,17 +771,21 @@ function kickoff(){
 }
 $('#kickoff').onclick = kickoff;
 $('#replay').onclick = kickoff;
-$('#change').onclick = () => { $('#confetti').innerHTML = ''; show('start'); };
-$('#home').onclick = () => { S.token++; hush(); show('start'); };
+$('#change').onclick = () => { $('#confetti').innerHTML = ''; show('category'); };
+$('#home').onclick = () => { S.token++; hush(); show('category'); };
 $('#again').onclick = () => S.q && speak(S.q.say);
 $('#countbtn').onclick = () => S.q && S.q.mode === 'flash' ? peek() : countWithMe();
-$('#pongStart').onclick = () => parentGate(() => openPicker(() => show('start'), false));
-$('#prizeEnd').onclick = () => usePrize(() => show('end'));
+// A finished prize game always lands back on the menu; backing out of the *picker* returns
+// to wherever it was opened from, since nothing has been spent.
+$('#pongStart').onclick = () => parentGate(() => openPicker(toMenu, false, () => show('start')), 'start');
+$('#goPrize').onclick = () => parentGate(() => openPicker(toMenu, false, toMenu), 'category');
+$('#prizeEnd').onclick = () => usePrize(toMenu, () => show('end'));
 
 /* ---------- parent gate ---------- */
-let gateAns = 0, gateCb = null;
-function parentGate(cb){
+let gateAns = 0, gateCb = null, gateBack = 'start';
+function parentGate(cb, back){
   if (S.locked) return;
+  gateBack = back || 'start';
   const a = ri(2, 12), b = ri(2, 12);
   gateAns = a * b; gateCb = cb;
   $('#gateQ').textContent = `${a} × ${b} = ?`;
@@ -743,30 +805,31 @@ $('#gateForm').onsubmit = e => {
     inp.focus();
   }
 };
-$('#gateCancel').onclick = () => { gateCb = null; show('start'); };
+$('#gateCancel').onclick = () => { gateCb = null; show(gateBack); };
 
 /* ---------- questions ---------- */
-const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const pick = a => a[Math.floor(Math.random() * a.length)];
-
+// Floors, not just a ceiling: "how many balls?" over two of them, or 3 + 1, is a freebie
+// rather than a question, so every mode starts well above one. MIN_NUM is the smallest
+// number a question is ever built around.
+const MIN_NUM = 3;
 function make(){
   const max = MAX_NUM, mode = pick(activeModes());
   if (mode === 'count'){
-    const n = ri(1, max);
+    const n = ri(MIN_NUM + 2, max);
     return {mode, key:'c'+n, n, ans:n, text:'How many balls?', say:'How many balls can you count?', win:`Goal! ${n} ${n === 1 ? 'ball' : 'balls'}!`};
   }
   if (mode === 'add'){
-    const a = ri(1, max - 1), b = ri(1, max - a);
+    const a = ri(MIN_NUM, max - MIN_NUM - 2), b = ri(MIN_NUM, max - a);
     return {mode, key:`a${a}${b}`, a, b, ans:a + b, text:'How many altogether?', eq:`${a} + ${b} = ?`,
       say:`${a}, and ${b} more. How many altogether?`, win:`Goal! ${a} and ${b} make ${a + b}!`};
   }
   if (mode === 'take'){
-    const n = ri(2, max), k = ri(1, n - 1);
+    const n = ri(MIN_NUM + 4, max), k = ri(MIN_NUM - 1, n - MIN_NUM);
     return {mode, key:`t${n}${k}`, n, k, ans:n - k, text:'How many are left?', eq:`${n} − ${k} = ?`,
       say:`There are ${n} balls. ${k} ${k === 1 ? 'rolls' : 'roll'} away. How many are left?`, win:`Goal! ${n - k} left!`};
   }
   if (mode === 'next'){
-    const top = max, s = ri(1, top - 3), seq = [s, s+1, s+2, s+3];
+    const top = max, s = ri(MIN_NUM - 1, top - 3), seq = [s, s+1, s+2, s+3];
     const gap = ri(1, 3);
     const spoken = seq.map((v, i) => i === gap ? 'hmm' : v).join(', ');
     return {mode, key:`n${s}${gap}`, seq, gap, ans:seq[gap], hi:top,
@@ -775,23 +838,26 @@ function make(){
       win:`Goal! ${seq.join(', ')}!`};
   }
   if (mode === 'make'){
-    const have = ri(1, max - 1), ans = max - have;
+    const have = ri(MIN_NUM, max - MIN_NUM), ans = max - have;
     return {mode, key:`k${have}`, have, target:max, ans, hi:max, text:`How many more to make ${max}?`, eq:`${have} + ? = ${max}`,
       say:`We have ${have}. How many more to make ${max}?`, win:`Goal! ${have} and ${ans} make ${max}!`, countSel:'.ball.empty'};
   }
   if (mode === 'flash'){
-    const n = ri(1, 8);
+    const n = ri(MIN_NUM, 8);
     return {mode, key:'f'+n, n, ans:n, text:'Quick look! How many?', say:'Quick look! How many balls?', win:`Goal! It was ${n}!`};
   }
   if (mode === 'bigger'){
-    const top = max;
-    let a, b; do { a = ri(1, top); b = ri(1, top); } while (a === b);
-    const ans = Math.max(a, b);
+    // Near neighbours, never 2 against 19: telling 14 from 16 apart is the actual skill.
+    // Build the smaller one first, so both stay inside MIN_NUM..max whichever way round they fall.
+    const top = max, lo = ri(MIN_NUM, top - 3), hi = Math.min(top, lo + ri(1, 3));
+    const flip = Math.random() < .5, a = flip ? hi : lo, b = flip ? lo : hi;
+    const ans = hi;
     return {mode, key:`b${a}${b}`, a, b, ans, pickFrom:[a, b], text:'Which number is bigger?', say:`Which is bigger, ${a} or ${b}?`,
       win:`Goal! ${ans} is bigger than ${Math.min(a, b)}!`};
   }
-  const gap = 2;
-  let a, b; do { a = ri(1, max); b = ri(1, max); } while (Math.abs(a - b) < gap);
+  // Two rows of shirts to count, so the groups stay small enough to see - and far enough
+  // apart that it isn't a coin toss.
+  let a, b; do { a = ri(MIN_NUM + 1, 10); b = ri(MIN_NUM + 1, 10); } while (Math.abs(a - b) < 2);
   const opp = other(S.team);
   const ans = a > b ? S.team : opp;
   return {mode:'more', key:`m${a}${b}${opp}`, a, b, opp, ans, text:'Which team has more players?', say:'Which team has more players?',
@@ -934,7 +1000,7 @@ function fullTime(hits){
 /* ---------- prize ---------- */
 function prizeUnlocked(hits, total, resume){
   $('#prizeMsg').textContent = `${hits} out of ${total} right first time! You won a prize game.`;
-  renderPicks($('#prizePick'), resume, true);
+  renderPicks($('#prizePick'), toMenu, true);
   show('prize'); confetti(S.team);
   speak(`${hits} out of ${total}! You won a prize game! Pick the one you want.`);
   $('#prizeLater').onclick = resume;
@@ -948,7 +1014,7 @@ const PRIZE_GAMES = [
   {key:'keepy',    ico:'🤹', name:'Keepy-uppies', go: after => Mini.start(Keepy, after, 'keepy')},
   {key:'scramble', ico:'🧹', name:'Scramble',   go: after => Mini.start(Scramble, after, 'scramble')}
 ];
-let pickerAfter = null, pickerSpend = true;
+let pickerAfter = null, pickerSpend = true, pickerBack = null;
 // Used both on the picker screen and inline on the prize screen, so a won prize is one tap from playing.
 function renderPicks(host, after, spend){
   host.innerHTML = PRIZE_GAMES.map((gm, i) =>
@@ -958,15 +1024,15 @@ function renderPicks(host, after, spend){
     playPrizeGame(PRIZE_GAMES[+b.dataset.i]);
   });
 }
-function openPicker(after, spend){
+function openPicker(after, spend, back){
   if (S.locked) return;
-  pickerAfter = after; pickerSpend = spend;
+  pickerAfter = after; pickerSpend = spend; pickerBack = back || after;
   renderPicks($('#pickGrid'), after, spend);
   show('picker');
 }
-function usePrize(after){
+function usePrize(after, back){
   if (S.prizes < 1) return;
-  openPicker(after, true);
+  openPicker(after, true, back);
 }
 function playPrizeGame(gm){
   if (pickerSpend){
@@ -976,7 +1042,7 @@ function playPrizeGame(gm){
   const back = pickerAfter;
   gm.go(() => back && back());
 }
-$('#pickBack').onclick = () => { const back = pickerAfter; pickerAfter = null; back ? back() : show('category'); };
+$('#pickBack').onclick = () => { const back = pickerBack || pickerAfter; pickerBack = pickerAfter = null; back ? back() : show('category'); };
 
 /* ---------- trophy cabinet ---------- */
 $('#goCabinet').onclick = () => showCabinet();
@@ -1243,7 +1309,7 @@ const Pong = (() => {
     if (S.locked) return;
     variant = (v === 'foosball' || v === 'squad') ? v : 'classic';
     after = cb; tok++; hush();
-    pads.bot.team = S.team; pads.top.team = other(S.team);
+    pads.bot.team = S.team; pads.top.team = awayTeam();
     score.top = score.bot = 0;
     show('pong'); audio(); dims();
     pads.top.x = pads.bot.x = W/2;
@@ -1286,7 +1352,7 @@ const Pong = (() => {
       speak(`${teamSay(team)} win the prize match!`);
       confetti(team);
       msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${teamName(team)} win!</div>
-        <button class="big" id="pback">Back to maths</button></div>`;
+        <button class="big" id="pback">Back to the menu</button></div>`;
       $('#pback').onclick = stop;
       return;
     }
@@ -1713,7 +1779,7 @@ const Penalty = {
     this.goalW = W * .8; this.goalX = (W - this.goalW) / 2; this.goalH = H * .17;
     this.kw = this.goalW * .26; this.kh = Math.max(16, H * .026);
     this.topY = H * .06; this.botY = H * .94 - this.goalH;
-    this.teams = [S.team, other(S.team)]; // 0 shoots at the top goal, 1 at the bottom
+    this.teams = [S.team, awayTeam()]; // 0 shoots at the top goal, 1 at the bottom
     this.scores = [0, 0]; this.results = [[], []];
     this.turn = 0; this.shots = 0; this.flash = '';
     this.setShot();
