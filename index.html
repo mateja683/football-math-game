@@ -45,6 +45,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   text-shadow:0 5px 0 rgba(0,0,0,.2)}
 .lede{font-size:21px;line-height:1.35;margin:0 0 8px;opacity:.92;max-width:30ch}
 .label{font-size:22px;font-weight:700;margin:20px 0 8px}
+.label.sub{font-size:18px;opacity:.85;margin:16px 0 6px}
 .teams{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .team{background:var(--glass);border:3px solid transparent;border-radius:24px;padding:10px 6px 8px;
   display:flex;flex-direction:column;align-items:center;font-size:14px;font-weight:700;line-height:1.15;text-align:center}
@@ -157,6 +158,25 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .grp svg{width:var(--s);height:var(--s)}
 .grp .num{font-size:clamp(80px,26vw,130px);font-weight:800;line-height:1}
 .grp.miss{opacity:.4}
+/* three shirts to choose between, rather than two groups to compare */
+.groups.three{grid-template-columns:repeat(3,1fr)}
+.groups.three .grp{min-height:0;padding:10px 4px}
+.groups.three .grp svg{width:clamp(62px,21vw,96px);height:auto}
+/* a scoreboard: each team's kit with the goals it scored under it */
+.groups.board .grp{flex-direction:column;flex-wrap:nowrap;align-items:center;gap:0;min-height:0;padding:10px 6px}
+.groups.board .grp svg{width:clamp(44px,13vw,64px);height:auto}
+.groups.board .num{font-size:clamp(52px,17vw,84px)}
+.arrow{font-size:clamp(26px,7.5vw,38px);font-weight:800;align-self:center;padding:0 4px}
+.sharerow{display:flex;align-items:center;gap:12px;margin-top:4px}
+.sharerow svg{width:clamp(42px,12vw,58px);height:auto}
+.sharerow span{font-size:26px;font-weight:800}
+/* a race to a finish line: how far along a runner is, is the whole question */
+.race{position:relative;width:100%;display:flex;flex-direction:column;gap:6px;padding-right:16px}
+.race::after{content:"";position:absolute;right:0;top:0;bottom:0;border-right:6px dashed rgba(255,255,255,.75)}
+.race .flag{position:absolute;right:-6px;top:50%;transform:translateY(-50%);font-size:32px;line-height:1}
+.lane{display:flex}
+.runner{width:22%;max-width:92px;flex:none;padding:0;background:none}
+.runner svg{width:100%;height:auto}
 
 /* ---------- celebrations ---------- */
 #goaltext{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:40;
@@ -311,18 +331,27 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="chip" id="allGames">All games</button>
   </div>
   <div id="modePicker" hidden>
+    <h3 class="label sub">Counting and numbers</h3>
     <div class="chips">
       <button class="chip mode" data-mode="count">Counting</button>
+      <button class="chip mode" data-mode="flash">Quick look</button>
+      <button class="chip mode" data-mode="more">Who has more?</button>
+      <button class="chip mode" data-mode="bigger">Bigger number</button>
+      <button class="chip mode" data-mode="smaller">Smaller number</button>
+      <button class="chip mode" data-mode="oneless">One more or less</button>
+      <button class="chip mode" data-mode="findnum">Find the shirt</button>
+      <button class="chip mode" data-mode="next">Missing number</button>
+      <button class="chip mode" data-mode="ordinal">Who came second?</button>
+    </div>
+    <h3 class="label sub">Adding and taking away</h3>
+    <div class="chips">
       <button class="chip mode" data-mode="add">Adding</button>
       <button class="chip mode" data-mode="take">Taking away</button>
-      <button class="chip mode" data-mode="more">Who has more?</button>
-    </div>
-    <h2 class="label">Harder games</h2>
-    <div class="chips">
-      <button class="chip mode" data-mode="next">Missing number</button>
+      <button class="chip mode" data-mode="double">Doubles</button>
+      <button class="chip mode" data-mode="score">Match scores</button>
+      <button class="chip mode" data-mode="make10">Make 10</button>
       <button class="chip mode" data-mode="make">Make 20</button>
-      <button class="chip mode" data-mode="flash">Quick look</button>
-      <button class="chip mode" data-mode="bigger">Bigger number</button>
+      <button class="chip mode" data-mode="share">Sharing</button>
     </div>
   </div>
 
@@ -486,7 +515,9 @@ const ROUND_LEN = 10;
 const PRIZE_THRESHOLD = ROUND_LEN - 1;
 const prizeEarned = (hits, total) => hits >= total - 1; // perfect, or perfect but one
 const MAX_NUM = 20;
-const ALL_MODES = ['count','add','take','more','next','make','flash','bigger'];
+const ALL_MODES = ['count','flash','more','bigger','smaller','oneless','findnum','next','ordinal',
+                   'add','take','double','score','make10','make','share'];
+const ORDINALS = ['first','second','third'];
 const SESSION_LIMIT_MS = 20 * 60 * 1000;
 
 let saved = {};
@@ -828,6 +859,53 @@ function make(){
     return {mode, key:`t${n}${k}`, n, k, ans:n - k, text:'How many are left?', eq:`${n} − ${k} = ?`,
       say:`There are ${n} balls. ${k} ${k === 1 ? 'rolls' : 'roll'} away. How many are left?`, win:`Goal! ${n - k} left!`};
   }
+  if (mode === 'double'){
+    const n = ri(2, Math.floor(max / 2)), ans = n * 2;
+    return {mode, key:'d'+n, n, ans, text:'Double it! How many altogether?', eq:`${n} + ${n} = ?`,
+      say:`Double ${n}. ${n}, and ${n} more. How many altogether?`, win:`Goal! Double ${n} is ${ans}!`};
+  }
+  if (mode === 'oneless'){
+    const n = ri(MIN_NUM + 1, max - 1), up = Math.random() < .5, ans = up ? n + 1 : n - 1;
+    return {mode, key:`o${n}${up}`, n, up, ans, hi:max,
+      text: up ? 'What is one more?' : 'What is one less?', eq:`${n} ${up ? '+' : '−'} 1 = ?`,
+      say: up ? `What is one more than ${n}?` : `What is one less than ${n}?`,
+      win:`Goal! One ${up ? 'more' : 'less'} than ${n} is ${ans}!`};
+  }
+  if (mode === 'share'){
+    const each = ri(2, Math.floor(max / 2)), total = each * 2;
+    return {mode, key:'s'+each, each, total, opp:awayTeam(), ans:each, hi:Math.floor(max / 2),
+      text:'Share them out. How many each?', eq:`${total} shared by 2 = ?`,
+      say:`There are ${total} balls to share between the two teams. How many does each team get?`,
+      win:`Goal! ${each} balls each!`};
+  }
+  if (mode === 'findnum'){
+    // near neighbours as the wrong shirts, so it's read rather than guessed by size
+    const ans = ri(MIN_NUM, max);
+    const pool = [ans-3, ans-2, ans-1, ans+1, ans+2, ans+3].filter(v => v >= 1 && v <= max);
+    const nums = [ans, ...pool.sort(() => Math.random() - .5).slice(0, 2)].sort(() => Math.random() - .5);
+    return {mode, key:'i'+ans+nums.join('-'), nums, ans, text:`Find number ${ans}`,
+      say:`Can you find the shirt with number ${ans} on it?`, win:`Goal! That's number ${ans}!`};
+  }
+  if (mode === 'ordinal'){
+    const place = ri(1, 3), nums = [];
+    while (nums.length < 3){ const v = ri(2, max - 1); if (!nums.includes(v)) nums.push(v); }
+    return {mode, key:`r${nums.join('-')}${place}`, nums, place, ans:nums[place - 1], // nums[0] leads
+      text:`Who came ${ORDINALS[place - 1]}?`, say:`Look at the race. Who came ${ORDINALS[place - 1]}?`,
+      win:`Goal! Number ${nums[place - 1]} came ${ORDINALS[place - 1]}!`};
+  }
+  if (mode === 'score'){
+    // the same adding and taking away, but you have to hear the match report to know which
+    const total = Math.random() < .5, opp = awayTeam();
+    const a = ri(2, 8), b = total ? ri(1, 8) : ri(1, a - 1);
+    const home = teamSay(S.team), away = teamSay(opp);
+    return {mode, key:`g${a}-${b}-${total}`, a, b, opp, total, ans: total ? a + b : a - b,
+      text: total ? 'How many goals in the match?' : 'How many more goals?',
+      eq: `${a} ${total ? '+' : '−'} ${b} = ?`,
+      say: total
+        ? `${home} scored ${a}. ${away} scored ${b}. How many goals were there in the whole match?`
+        : `${home} scored ${a}. ${away} scored ${b}. How many more goals did ${home} score?`,
+      win: total ? `Goal! ${a} and ${b} make ${a + b} goals!` : `Goal! ${a - b} more!`};
+  }
   if (mode === 'next'){
     const top = max, s = ri(MIN_NUM - 1, top - 3), seq = [s, s+1, s+2, s+3];
     const gap = ri(1, 3);
@@ -837,23 +915,27 @@ function make(){
       say: gap === 3 ? `${seq.slice(0,3).join(', ')}. What comes next?` : `${spoken}. Which number is missing?`,
       win:`Goal! ${seq.join(', ')}!`};
   }
-  if (mode === 'make'){
-    const have = ri(MIN_NUM, max - MIN_NUM), ans = max - have;
-    return {mode, key:`k${have}`, have, target:max, ans, hi:max, text:`How many more to make ${max}?`, eq:`${have} + ? = ${max}`,
-      say:`We have ${have}. How many more to make ${max}?`, win:`Goal! ${have} and ${ans} make ${max}!`, countSel:'.ball.empty'};
+  if (mode === 'make' || mode === 'make10'){
+    const target = mode === 'make10' ? 10 : max;
+    const have = ri(2, target - 2), ans = target - have;
+    return {mode, key:`k${target}-${have}`, have, target, ans, hi:target, text:`How many more to make ${target}?`, eq:`${have} + ? = ${target}`,
+      say:`We have ${have}. How many more to make ${target}?`, win:`Goal! ${have} and ${ans} make ${target}!`, countSel:'.ball.empty'};
   }
   if (mode === 'flash'){
     const n = ri(MIN_NUM, 8);
     return {mode, key:'f'+n, n, ans:n, text:'Quick look! How many?', say:'Quick look! How many balls?', win:`Goal! It was ${n}!`};
   }
-  if (mode === 'bigger'){
+  if (mode === 'bigger' || mode === 'smaller'){
     // Near neighbours, never 2 against 19: telling 14 from 16 apart is the actual skill.
     // Build the smaller one first, so both stay inside MIN_NUM..max whichever way round they fall.
+    const big = mode === 'bigger';
     const top = max, lo = ri(MIN_NUM, top - 3), hi = Math.min(top, lo + ri(1, 3));
     const flip = Math.random() < .5, a = flip ? hi : lo, b = flip ? lo : hi;
-    const ans = hi;
-    return {mode, key:`b${a}${b}`, a, b, ans, pickFrom:[a, b], text:'Which number is bigger?', say:`Which is bigger, ${a} or ${b}?`,
-      win:`Goal! ${ans} is bigger than ${Math.min(a, b)}!`};
+    const ans = big ? hi : lo;
+    return {mode, key:`b${big}${a}${b}`, a, b, ans, pickFrom:[a, b],
+      text: big ? 'Which number is bigger?' : 'Which number is smaller?',
+      say: big ? `Which is bigger, ${a} or ${b}?` : `Which is smaller, ${a} or ${b}?`,
+      win:`Goal! ${ans} is ${big ? 'bigger' : 'smaller'} than ${big ? lo : hi}!`};
   }
   // Two rows of shirts to count, so the groups stay small enough to see - and far enough
   // apart that it isn't a coin toss.
@@ -884,24 +966,49 @@ function next(){
     const grp = (team, n) => `<button class="grp" data-v="${team}" aria-label="${teamName(team)}">${Array.from({length:n}, () => shirt(team)).join('')}</button>`;
     stage.innerHTML = `<div class="groups">${grp(S.team, q.a)}${grp(q.opp, q.b)}</div>`;
     numeric = counting = false;
-  } else if (q.mode === 'bigger'){
+  } else if (q.mode === 'bigger' || q.mode === 'smaller'){
     stage.innerHTML = `<div class="groups">${q.pickFrom.map(v => `<button class="grp" data-v="${v}"><span class="num">${v}</span></button>`).join('')}</div>`;
     numeric = counting = false;
   } else if (q.mode === 'next'){
     stage.innerHTML = `<div class="seq" role="img" aria-label="Shirt numbers">${q.seq.map((v, i) => shirt(S.team, i === q.gap ? '?' : v)).join('')}</div>`;
     counting = false;
-  } else if (q.mode === 'make'){
+  } else if (q.mode === 'make' || q.mode === 'make10'){
     stage.innerHTML = frame(q.have, 0, q.ans);
   } else if (q.mode === 'flash'){
     stage.innerHTML = `<div class="flashbox">${frame(q.n)}<div class="cover" aria-hidden="true">?</div></div>`;
     cb.textContent = 'Peek again';
     const tok = S.token;
     setTimeout(() => { if (tok === S.token) $('.flashbox')?.classList.add('hide'); }, 1800);
+  } else if (q.mode === 'oneless'){
+    stage.innerHTML = `<div class="seq" role="img" aria-label="Shirt number ${q.n}">${shirt(S.team, q.n)}` +
+      `<div class="arrow" aria-hidden="true">${q.up ? '+1' : '−1'}</div>${shirt(S.team, '?')}</div>`;
+    counting = false;
+  } else if (q.mode === 'double'){
+    stage.innerHTML = frame(q.n) + '<div class="plus" aria-hidden="true">+</div>' + frame(q.n);
+  } else if (q.mode === 'share'){
+    stage.innerHTML = frame(q.total) +
+      `<div class="sharerow" aria-hidden="true">${shirt(S.team)}<span>and</span>${shirt(q.opp)}</div>`;
+    counting = false; // counting all of them out doesn't help you share them
+  } else if (q.mode === 'findnum'){
+    stage.innerHTML = `<div class="groups three">${q.nums.map(v =>
+      `<button class="grp" data-v="${v}" aria-label="Number ${v}">${shirt(S.team, v)}</button>`).join('')}</div>`;
+    numeric = counting = false;
+  } else if (q.mode === 'ordinal'){
+    const lanes = [0, 1, 2].sort(() => Math.random() - .5);   // the leader isn't always the top row
+    const along = ['60%', '34%', '8%'];                        // how far up the track each place got
+    const rows = lanes.map(place => `<div class="lane"><button class="runner" data-v="${q.nums[place]}"` +
+      ` style="margin-left:${along[place]}" aria-label="Number ${q.nums[place]}">${shirt(S.team, q.nums[place])}</button></div>`);
+    stage.innerHTML = `<div class="race">${rows.join('')}<span class="flag" aria-hidden="true">🏁</span></div>`;
+    numeric = counting = false;
+  } else if (q.mode === 'score'){
+    stage.innerHTML = `<div class="groups board" role="img" aria-label="${teamName(S.team)} ${q.a}, ${teamName(q.opp)} ${q.b}">` +
+      [[S.team, q.a], [q.opp, q.b]].map(([t, v]) => `<div class="grp">${shirt(t)}<span class="num">${v}</span></div>`).join('') + '</div>';
+    counting = false;
   } else if (q.mode === 'count') stage.innerHTML = frame(q.n);
   else if (q.mode === 'add') stage.innerHTML = frame(q.a) + '<div class="plus" aria-hidden="true">+</div>' + frame(q.b);
   else if (q.mode === 'take') stage.innerHTML = frame(q.n, q.k);
 
-  stage.querySelectorAll('.grp').forEach(g => g.onclick = () => answer(isNaN(+g.dataset.v) ? g.dataset.v : +g.dataset.v, g));
+  stage.querySelectorAll('[data-v]').forEach(g => g.onclick = () => answer(isNaN(+g.dataset.v) ? g.dataset.v : +g.dataset.v, g));
   if (numeric){
     answers.innerHTML = options(q.ans, q.hi || MAX_NUM).map(v => `<button class="ans" data-v="${v}">${v}</button>`).join('');
     answers.querySelectorAll('.ans').forEach(b => b.onclick = () => answer(+b.dataset.v, b));
@@ -938,11 +1045,14 @@ function answer(v, el){
   }
   if (!S.missed){ S.missed = true; save(); streakBar(); }
   el.classList.remove('miss'); void el.offsetWidth; el.classList.add('miss'); el.disabled = true;
-  if (S.q.mode === 'more') speak('Nearly! Count the shirts and try again.');
-  else if (S.q.mode === 'bigger') speak('Nearly! Try the other one.');
-  else if (S.q.mode === 'next') speak('Nearly! Let’s count along and try again.');
-  else if (S.q.mode === 'flash') { speak('Nearly! Have another peek.'); $('#countbtn').classList.add('nudge'); }
-  else { speak('Nearly! Have another go.'); $('#countbtn').classList.add('nudge'); }
+  const m = S.q.mode;
+  if (m === 'more') speak('Nearly! Count the shirts and try again.');
+  else if (m === 'bigger' || m === 'smaller') speak('Nearly! Try the other one.');
+  else if (m === 'next' || m === 'oneless') speak('Nearly! Let’s count along and try again.');
+  else if (m === 'findnum') speak('Nearly! Look for the number I said.');
+  else if (m === 'ordinal') speak('Nearly! Who is closest to the finish line?');
+  else if (m === 'flash') { speak('Nearly! Have another peek.'); $('#countbtn').classList.add('nudge'); }
+  else { speak('Nearly! Have another go.'); if (!$('#countbtn').hidden) $('#countbtn').classList.add('nudge'); }
 }
 
 function slots(){
