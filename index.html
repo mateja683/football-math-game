@@ -49,6 +49,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .teams{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .team{background:var(--glass);border:3px solid transparent;border-radius:24px;padding:10px 6px 8px;
   display:flex;flex-direction:column;align-items:center;font-size:14px;font-weight:700;line-height:1.15;text-align:center}
+.teams .land{grid-column:1/-1;font-size:18px;font-weight:700;opacity:.85;margin:10px 0 -2px}
 .team svg{width:clamp(54px,17vw,78px);height:auto}
 .team[aria-pressed="true"]{background:var(--glass2);border-color:var(--chalk)}
 /* the two-kit summary that stands in for the full grid on the home and maths screens */
@@ -257,21 +258,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <pattern id="stripes" width="20" height="100" patternUnits="userSpaceOnUse">
-      <rect width="10" height="100" fill="#d4152b"/><rect x="10" width="10" height="100" fill="#ffffff"/>
-    </pattern>
-    <pattern id="stripes2" width="20" height="100" patternUnits="userSpaceOnUse">
-      <rect width="10" height="100" fill="#003399"/><rect x="10" width="10" height="100" fill="#a50044"/>
-    </pattern>
-    <pattern id="stripes3" width="20" height="100" patternUnits="userSpaceOnUse">
-      <rect width="10" height="100" fill="#ffffff"/><rect x="10" width="10" height="100" fill="#1b1b1b"/>
-    </pattern>
-    <!-- halves, not stripes: one pattern tile as wide as the whole shirt, so the split lands on its centre line -->
-    <pattern id="halves" width="100" height="100" patternUnits="userSpaceOnUse">
-      <rect width="50" height="100" fill="#e01c21"/><rect x="50" width="50" height="100" fill="#ffffff"/>
-    </pattern>
-  </defs>
+  <defs id="kitDefs"></defs>
 </svg>
 
 <!-- CATEGORY -->
@@ -544,30 +531,71 @@ function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // otherwise be mangled. `fam` groups kits that look alike, so the prize match never picks a
 // near-identical opponent - the two sides still have to be tellable apart at a glance.
 const TEAMS = {
-  blue:    {name:'AFC Wimbledon',     fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff'], say:'A F C Wimbledon'},
-  red:     {name:'Crvena Zvezda',     fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff'], say:'Tsir-venn-ah Zveh-zdah'},
-  claret:  {name:'West Ham',          fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
-  navy:    {name:'Chelsea',           fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
-  garnet:  {name:'Barcelona',         fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
-  amber:   {name:'Mansfield Town',    fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
-  scarlet: {name:'Arsenal',           fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
-  allred:  {name:'Liverpool',         fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
-  crimson: {name:'Man United',        fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff'], say:'Manchester United'},
-  royal:   {name:'Everton',           fam:'blue',   main:'#1a53c8', trim:'#ffffff', confetti:['#1a53c8','#ffffff']},
-  lion:    {name:'Millwall',          fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
-  sky:     {name:'Man City',          fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff'], say:'Manchester City'},
-  white:   {name:'Tottenham',         fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
-  halves:  {name:'Feyenoord',         fam:'red',    main:'#e01c21', trim:'#ffffff', confetti:['#e01c21','#ffffff']},
-  black:   {name:'Partizan Belgrade', fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']}
+  blue:    {name:'AFC Wimbledon',     land:'England',  fam:'blue',   main:'#1d3f9e', trim:'#f5c400', confetti:['#1d3f9e','#f5c400','#ffffff'], say:'A F C Wimbledon'},
+  red:     {name:'Crvena Zvezda',     land:'Serbia',   fam:'red',    main:'#d4152b', trim:'#ffffff', confetti:['#d4152b','#ffffff'], say:'Tsir-venn-ah Zveh-zdah'},
+  claret:  {name:'West Ham',          land:'England',  fam:'claret', main:'#7a263a', trim:'#7cc6ec', confetti:['#7a263a','#7cc6ec','#ffffff']},
+  navy:    {name:'Chelsea',           land:'England',  fam:'blue',   main:'#0a3a7a', trim:'#ffffff', confetti:['#0a3a7a','#ffffff']},
+  garnet:  {name:'Barcelona',         land:'Spain',    fam:'blue',   main:'#003399', trim:'#a50044', confetti:['#003399','#a50044','#ffffff']},
+  amber:   {name:'Mansfield Town',    land:'England',  fam:'amber',  main:'#e6a817', trim:'#1c3f94', confetti:['#e6a817','#1c3f94','#ffffff']},
+  scarlet: {name:'Arsenal',           land:'England',  fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff']},
+  allred:  {name:'Liverpool',         land:'England',  fam:'red',    main:'#c8102e', trim:'#f2c14e', confetti:['#c8102e','#f2c14e','#ffffff']},
+  crimson: {name:'Man United',        land:'England',  fam:'red',    main:'#cf0a2c', trim:'#1b1b1b', confetti:['#cf0a2c','#1b1b1b','#ffffff'], say:'Manchester United'},
+  royal:   {name:'Everton',           land:'England',  fam:'blue',   main:'#1a53c8', trim:'#ffffff', confetti:['#1a53c8','#ffffff']},
+  lion:    {name:'Millwall',          land:'England',  fam:'blue',   main:'#0a2472', trim:'#ffffff', confetti:['#0a2472','#ffffff']},
+  sky:     {name:'Man City',          land:'England',  fam:'sky',    main:'#6cabdd', trim:'#1c2c5b', confetti:['#6cabdd','#1c2c5b','#ffffff'], say:'Manchester City'},
+  white:   {name:'Tottenham',         land:'England',  fam:'white',  main:'#f4f4f4', trim:'#17275c', confetti:['#ffffff','#17275c']},
+  halves:  {name:'Feyenoord',         land:'Netherlands', fam:'red', main:'#e01c21', trim:'#ffffff', confetti:['#e01c21','#ffffff']},
+  black:   {name:'Partizan Belgrade', land:'Serbia',   fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']},
+  // Several of these share a real-life kit with another club (red-and-white stripes, black-and-white
+  // stripes); `fam` keeps any two of them off the same pitch and the name label tells them apart.
+  ajax:    {name:'Ajax',              land:'Netherlands', fam:'white', main:'#d2122e', trim:'#ffffff', confetti:['#d2122e','#ffffff'], say:'Eye-axe'},
+  psv:     {name:'PSV',               land:'Netherlands', fam:'red', main:'#ed1c24', trim:'#ffffff', confetti:['#ed1c24','#ffffff'], say:'P S V'},
+  psg:     {name:'Paris Saint-Germain', land:'France', fam:'blue',   main:'#004170', trim:'#da291c', confetti:['#004170','#da291c','#ffffff'], say:'Paris Saint Germain'},
+  monaco:  {name:'Monaco',            land:'France',   fam:'red',    main:'#e51b22', trim:'#ffffff', confetti:['#e51b22','#ffffff']},
+  marseille:{name:'Marseille',        land:'France',   fam:'white',  main:'#f4f4f4', trim:'#2faee0', confetti:['#ffffff','#2faee0']},
+  bayern:  {name:'Bayern Munich',     land:'Germany',  fam:'red',    main:'#dc052d', trim:'#ffffff', confetti:['#dc052d','#ffffff']},
+  bvb:     {name:'Borussia Dortmund', land:'Germany',  fam:'amber',  main:'#fde100', trim:'#1b1b1b', confetti:['#fde100','#1b1b1b']},
+  porto:   {name:'Porto',             land:'Portugal', fam:'blue',   main:'#0f4ea1', trim:'#ffffff', confetti:['#0f4ea1','#ffffff']},
+  benfica: {name:'Benfica',           land:'Portugal', fam:'red',    main:'#e2001a', trim:'#ffffff', confetti:['#e2001a','#ffffff']},
+  sporting:{name:'Sporting',          land:'Portugal', fam:'green',  main:'#008057', trim:'#ffffff', confetti:['#008057','#ffffff']},
+  bilbao:  {name:'Athletic Bilbao',   land:'Spain',    fam:'red',    main:'#ee2523', trim:'#ffffff', confetti:['#ee2523','#ffffff','#1b1b1b']},
+  atleti:  {name:'Atlético Madrid',   land:'Spain',    fam:'red',    main:'#cb3524', trim:'#ffffff', confetti:['#cb3524','#ffffff','#262f61'], say:'Atletico Madrid'},
+  valencia:{name:'Valencia',          land:'Spain',    fam:'white',  main:'#f4f4f4', trim:'#1b1b1b', confetti:['#ffffff','#1b1b1b','#ee7f1a']},
+  sevilla: {name:'Sevilla',           land:'Spain',    fam:'white',  main:'#f4f4f4', trim:'#d4152b', confetti:['#ffffff','#d4152b']},
+  betis:   {name:'Real Betis',        land:'Spain',    fam:'green',  main:'#0bb363', trim:'#ffffff', confetti:['#0bb363','#ffffff']},
+  milan:   {name:'AC Milan',          land:'Italy',    fam:'red',    main:'#fb090b', trim:'#1b1b1b', confetti:['#fb090b','#1b1b1b','#ffffff'], say:'A C Milan'},
+  inter:   {name:'Inter',             land:'Italy',    fam:'blue',   main:'#0068a8', trim:'#1b1b1b', confetti:['#0068a8','#1b1b1b','#ffffff']},
+  juve:    {name:'Juventus',          land:'Italy',    fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']},
+  roma:    {name:'Roma',              land:'Italy',    fam:'claret', main:'#8e1f2f', trim:'#f0bc42', confetti:['#8e1f2f','#f0bc42','#ffffff']},
+  lazio:   {name:'Lazio',             land:'Italy',    fam:'sky',    main:'#87d8f7', trim:'#ffffff', confetti:['#87d8f7','#ffffff','#1c2c5b']},
+  napoli:  {name:'Napoli',            land:'Italy',    fam:'sky',    main:'#12a0d7', trim:'#ffffff', confetti:['#12a0d7','#ffffff']}
 };
-// Kits that aren't a plain colour. `url` is the SVG pattern the shirt is filled with; `kind`
-// is how the same kit gets painted on canvas and on the arrow buttons.
+// The order the kit grid's country headings appear in.
+const LANDS = ['England','Spain','Italy','Germany','France','Portugal','Netherlands','Serbia'];
+// Kits that aren't a plain colour. `kind` is how the kit is painted - as an SVG <pattern> on the
+// shirt (built from this list at load by kitDefs(), id `kit-<team>`), on canvas by patternFill()
+// and on the arrow buttons by kitStyles(). `dark` outlines it; `trim` (optional) is the collar and
+// cuffs if they aren't `accent`. `band` is a centre band's width as a fraction of the shirt, and
+// `edge` an optional thin stripe either side of it (PSG's white piping).
 const PATTERNED = {
-  red:    { url:'stripes',  kind:'stripes', base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
-  garnet: { url:'stripes2', kind:'stripes', base:'#003399', accent:'#a50044', dark:'#6d0033' },
-  black:  { url:'stripes3', kind:'stripes', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
-  halves: { url:'halves',   kind:'halves',  base:'#ffffff', accent:'#e01c21', dark:'#9c0f14' }
+  red:     { kind:'stripes',  base:'#ffffff', accent:'#d4152b', dark:'#8f0d1c' },
+  garnet:  { kind:'stripes',  base:'#003399', accent:'#a50044', dark:'#6d0033' },
+  black:   { kind:'stripes',  base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
+  halves:  { kind:'halves',   base:'#ffffff', accent:'#e01c21', dark:'#9c0f14' },
+  psv:     { kind:'stripes',  base:'#ffffff', accent:'#ed1c24', dark:'#9c0f14' },
+  porto:   { kind:'stripes',  base:'#ffffff', accent:'#0f4ea1', dark:'#082d5e' },
+  bilbao:  { kind:'stripes',  base:'#ffffff', accent:'#ee2523', dark:'#1b1b1b' },
+  atleti:  { kind:'stripes',  base:'#ffffff', accent:'#cb3524', dark:'#262f61', trim:'#262f61' },
+  betis:   { kind:'stripes',  base:'#ffffff', accent:'#0bb363', dark:'#067a43' },
+  milan:   { kind:'stripes',  base:'#1b1b1b', accent:'#fb090b', dark:'#000000' },
+  inter:   { kind:'stripes',  base:'#1b1b1b', accent:'#0068a8', dark:'#000000' },
+  juve:    { kind:'stripes',  base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
+  ajax:    { kind:'band',     base:'#ffffff', accent:'#d2122e', dark:'#8f0d1c', band:.36 },
+  psg:     { kind:'band',     base:'#004170', accent:'#da291c', dark:'#00213a', band:.24, edge:'#ffffff' },
+  sporting:{ kind:'hoops',    base:'#ffffff', accent:'#008057', dark:'#004d34' },
+  monaco:  { kind:'diagonal', base:'#ffffff', accent:'#e51b22', dark:'#9c0f14' }
 };
+const DIAG = Math.tan(35 * Math.PI / 180); // Monaco's split, red above a line rising to the right
 // One place both canvases paint a patterned kit, so a new `kind` only has to be taught once.
 function patternFill(g, st, x, y, w, h){
   if (st.kind === 'halves'){
@@ -576,9 +604,47 @@ function patternFill(g, st, x, y, w, h){
     return;
   }
   g.fillStyle = st.base; g.fillRect(x, y, w, h);
+  if (st.kind === 'band'){
+    const bw = w * st.band, e = st.edge ? Math.max(2, bw * .15) : 0;
+    if (e){ g.fillStyle = st.edge; g.fillRect(x + (w - bw) / 2 - e, y, bw + e * 2, h); }
+    g.fillStyle = st.accent; g.fillRect(x + (w - bw) / 2, y, bw, h);
+    return;
+  }
   g.fillStyle = st.accent;
+  if (st.kind === 'hoops'){ for (let j = y; j < y + h; j += 12) g.fillRect(x, j, w, 6); return; }
+  if (st.kind === 'diagonal'){ // everything above a line through the centre; callers clip to the kit's shape
+    const cx = x + w / 2, cy = y + h / 2, far = w + h;
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    g.beginPath();
+    g.moveTo(cx - far, cy + far * DIAG); g.lineTo(cx + far, cy - far * DIAG);
+    g.lineTo(cx + far, y - far); g.lineTo(cx - far, y - far); g.closePath(); g.fill();
+    g.restore();
+    return;
+  }
   for (let i = x; i < x + w; i += 16) g.fillRect(i, y, 8, h);
 }
+// The shirt icons' <pattern>s, one per patterned kit, in the shirt's 100x100 space (body x 28-72).
+(function kitDefs(){
+  const r = (x, y, w, h, f) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}"/>`;
+  document.getElementById('kitDefs').innerHTML = Object.keys(PATTERNED).map(t => {
+    const st = PATTERNED[t];
+    let w = 20, h = 100, body;
+    if (st.kind === 'stripes') body = r(0, 0, 10, 100, st.accent) + r(10, 0, 10, 100, st.base);
+    else if (st.kind === 'hoops'){ w = 100; h = 16; body = r(0, 0, 100, 8, st.accent) + r(0, 8, 100, 8, st.base); }
+    else {
+      w = 100; body = r(0, 0, 100, 100, st.base);
+      if (st.kind === 'halves') body = r(0, 0, 50, 100, st.accent) + r(50, 0, 50, 100, st.base);
+      if (st.kind === 'band'){
+        const bw = 44 * st.band;
+        if (st.edge) body += r(50 - bw / 2 - 3, 0, bw + 6, 100, st.edge);
+        body += r(50 - bw / 2, 0, bw, 100, st.accent);
+      }
+      if (st.kind === 'diagonal')
+        body += `<path d="M0 0 H100 V${50 - 50 * DIAG} L0 ${50 + 50 * DIAG} Z" fill="${st.accent}"/>`;
+    }
+    return `<pattern id="kit-${t}" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${body}</pattern>`;
+  }).join('');
+})();
 const SLEEVED = ['claret','amber','scarlet','lion'];
 if (!TEAMS[S.team]) S.team = 'blue';
 // Some kits are pale (white, gold, sky), so anything drawn on top of one needs dark ink.
@@ -604,9 +670,14 @@ const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not
 (function kitStyles(){
   const css = Object.keys(TEAMS).map(t => {
     const st = PATTERNED[t];
-    const bg = st && st.kind === 'halves'
-      ? `linear-gradient(90deg,${st.accent} 0 50%,${st.base} 50% 100%)`
-      : st ? `repeating-linear-gradient(90deg,${st.base} 0 12px,${st.accent} 12px 24px)` : '';
+    const b = st && st.band * 50, e = st && st.edge ? 4 : 0;
+    const bg = !st ? ''
+      : st.kind === 'halves' ? `linear-gradient(90deg,${st.accent} 0 50%,${st.base} 50% 100%)`
+      : st.kind === 'band' ? `linear-gradient(90deg,${st.base} 0 ${50 - b - e}%,${st.edge || st.accent} ${50 - b - e}% ${50 - b}%,`
+          + `${st.accent} ${50 - b}% ${50 + b}%,${st.edge || st.accent} ${50 + b}% ${50 + b + e}%,${st.base} ${50 + b + e}% 100%)`
+      : st.kind === 'hoops' ? `repeating-linear-gradient(180deg,${st.accent} 0 10px,${st.base} 10px 20px)`
+      : st.kind === 'diagonal' ? `linear-gradient(160deg,${st.accent} 0 50%,${st.base} 50% 100%)`
+      : `repeating-linear-gradient(90deg,${st.base} 0 12px,${st.accent} 12px 24px)`;
     return st
       ? `.pbtn.${t}{background:${bg};border-color:${st.dark};color:#fff;text-shadow:0 0 6px #12301a,0 0 2px #12301a}`
       : `.pbtn.${t}{background:${TEAMS[t].main};border-color:${TEAMS[t].trim};color:${kitInk(t)}}`;
@@ -617,8 +688,8 @@ const teamSay = t => TEAMS[t].say || TEAMS[t].name; // what the voice reads, not
 /* ---------- drawing ---------- */
 function shirt(team, label){
   const st = PATTERNED[team];
-  const body = st ? `fill:url(#${st.url})` : `fill:${TEAMS[team].main}`;
-  const trim = st ? st.accent : TEAMS[team].trim;
+  const body = st ? `fill:url(#kit-${team})` : `fill:${TEAMS[team].main}`;
+  const trim = st ? st.trim || st.accent : TEAMS[team].trim;
   const cuff = SLEEVED.includes(team) ? TEAMS[team].main : trim;
   const sleeves = SLEEVED.includes(team)
     ? `<path d="M30 10 L7 27 L18 43 L28 37 Z M70 10 L93 27 L82 43 L72 37 Z" fill="${TEAMS[team].trim}" stroke="rgba(0,0,0,.35)" stroke-width="2.5" stroke-linejoin="round"/>` : '';
@@ -748,8 +819,10 @@ let wordEndReplay = null;
 /* ---------- teams: home is the child's, away is the grown-up's ---------- */
 // One grid on its own screen serves both sides; the menu and the maths screen each show a
 // two-kit summary bar that opens it.
-$('#teamGrid').innerHTML = Object.keys(TEAMS).map(t =>
-  `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${TEAMS[t].name}</button>`).join('');
+// Grouped by country under small headings - with this many kits, one long list is hard to find a team in.
+$('#teamGrid').innerHTML = LANDS.map(land => `<h2 class="land">${land}</h2>` +
+  Object.keys(TEAMS).filter(t => TEAMS[t].land === land).map(t =>
+    `<button class="team" data-team="${t}" aria-pressed="false"><span class="shirt"></span>${TEAMS[t].name}</button>`).join('')).join('');
 $$('.team').forEach(b => { b.querySelector('.shirt').innerHTML = shirt(b.dataset.team); b.onclick = () => chooseTeam(b.dataset.team); });
 let teamSide = 'home', teamsBack = 'category';
 function renderTeamBar(host){
