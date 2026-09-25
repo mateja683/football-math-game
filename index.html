@@ -585,10 +585,32 @@ const TEAMS = {
   newcastle:{name:'Newcastle',        land:'England',  fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']},
   forest:  {name:'Nottingham Forest', land:'England',  fam:'red',    main:'#dd0000', trim:'#ffffff', confetti:['#dd0000','#ffffff']},
   sunderland:{name:'Sunderland',      land:'England',  fam:'red',    main:'#eb172b', trim:'#ffffff', confetti:['#eb172b','#ffffff']},
-  fulham:  {name:'Fulham',            land:'England',  fam:'white',  main:'#f4f4f4', trim:'#1b1b1b', confetti:['#ffffff','#1b1b1b']}
+  fulham:  {name:'Fulham',            land:'England',  fam:'white',  main:'#f4f4f4', trim:'#1b1b1b', confetti:['#ffffff','#1b1b1b']},
+  sociedad:{name:'Real Sociedad',     land:'Spain',    fam:'blue',   main:'#0a3d8f', trim:'#ffffff', confetti:['#0a3d8f','#ffffff'], say:'Real So-see-eh-dad'},
+  villarreal:{name:'Villarreal',      land:'Spain',    fam:'amber',  main:'#ffe500', trim:'#0a3c78', confetti:['#ffe500','#0a3c78'], say:'Vee-ya-reh-al'},
+  celta:   {name:'Celta Vigo',        land:'Spain',    fam:'sky',    main:'#63b7e6', trim:'#ffffff', confetti:['#63b7e6','#ffffff']},
+  espanyol:{name:'Espanyol',          land:'Spain',    fam:'blue',   main:'#1c5fae', trim:'#ffffff', confetti:['#1c5fae','#ffffff'], say:'Es-pan-yol'},
+  atalanta:{name:'Atalanta',          land:'Italy',    fam:'blue',   main:'#0f66b0', trim:'#ffffff', confetti:['#0f66b0','#1b1b1b','#ffffff']},
+  torino:  {name:'Torino',            land:'Italy',    fam:'claret', main:'#7a1f3a', trim:'#ffffff', confetti:['#7a1f3a','#ffffff']},
+  sampdoria:{name:'Sampdoria',        land:'Italy',    fam:'blue',   main:'#0f2350', trim:'#c8102e', confetti:['#0f2350','#c8102e','#ffffff'], say:'Samp-dor-ee-a'},
+  bologna: {name:'Bologna',           land:'Italy',    fam:'red',    main:'#c8102e', trim:'#1c3f7a', confetti:['#c8102e','#1c3f7a'], say:'Bo-lon-ya'},
+  leverkusen:{name:'Bayer Leverkusen',land:'Germany',  fam:'red',    main:'#e2001a', trim:'#1b1b1b', confetti:['#e2001a','#1b1b1b','#ffffff'], say:'By-er Lever-koo-zen'},
+  gladbach:{name:'Borussia Mönchengladbach', land:'Germany', fam:'white', main:'#f4f4f4', trim:'#00612c', confetti:['#ffffff','#00612c'], say:'Bo-russia Mun-ken-glad-bak'},
+  lyon:    {name:'Lyon',              land:'France',   fam:'white',  main:'#f4f4f4', trim:'#003b7a', confetti:['#ffffff','#003b7a','#e2001a'], say:'Lee-on'},
+  nice:    {name:'Nice',              land:'France',   fam:'red',    main:'#c8102e', trim:'#1b1b1b', confetti:['#c8102e','#1b1b1b'], say:'Neess'},
+  braga:   {name:'Braga',             land:'Portugal', fam:'red',    main:'#e1170f', trim:'#ffffff', confetti:['#e1170f','#ffffff'], say:'Brah-ga'},
+  celtic:  {name:'Celtic',            land:'Scotland', fam:'green',  main:'#018749', trim:'#ffffff', confetti:['#018749','#ffffff']},
+  rangers: {name:'Rangers',           land:'Scotland', fam:'blue',   main:'#003399', trim:'#c8102e', confetti:['#003399','#c8102e','#ffffff']},
+  brugge:  {name:'Club Brugge',       land:'Belgium',  fam:'blue',   main:'#0057b8', trim:'#ffffff', confetti:['#0057b8','#1b1b1b','#ffffff'], say:'Club Broo-guh'},
+  anderlecht:{name:'Anderlecht',      land:'Belgium',  fam:'purple', main:'#652d86', trim:'#ffffff', confetti:['#652d86','#ffffff'], say:'An-der-lekt'},
+  galatasaray:{name:'Galatasaray',    land:'Turkey',   fam:'amber',  main:'#a90432', trim:'#f5c400', confetti:['#a90432','#f5c400','#ffffff'], say:'Gala-ta-sa-rye'},
+  fenerbahce:{name:'Fenerbahçe',      land:'Turkey',   fam:'amber',  main:'#ffd400', trim:'#0a2f6b', confetti:['#ffd400','#0a2f6b'], say:'Fen-er-bah-cheh'},
+  besiktas:{name:'Beşiktaş',          land:'Turkey',   fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff'], say:'Besh-ik-tash'},
+  olympiacos:{name:'Olympiacos',      land:'Greece',   fam:'red',    main:'#c8102e', trim:'#ffffff', confetti:['#c8102e','#ffffff'], say:'O-lim-pee-ah-kos'},
+  panathinaikos:{name:'Panathinaikos',land:'Greece',   fam:'green',  main:'#0a8a3c', trim:'#ffffff', confetti:['#0a8a3c','#ffffff'], say:'Pana-thin-eye-kos'}
 };
 // The order the kit grid's country headings appear in.
-const LANDS = ['England','Spain','Italy','Germany','France','Portugal','Netherlands','Serbia'];
+const LANDS = ['England','Spain','Italy','Germany','France','Portugal','Netherlands','Serbia','Scotland','Belgium','Turkey','Greece'];
 // Kits that aren't a plain colour. `kind` is how the kit is painted - as an SVG <pattern> on the
 // shirt (built from this list at load by kitDefs(), id `kit-<team>`), on canvas by patternFill()
 // and on the arrow buttons by kitStyles(). `dark` outlines it; `trim` (optional) is the collar and
@@ -613,7 +635,19 @@ const PATTERNED = {
   monaco:  { kind:'diagonal', base:'#ffffff', accent:'#e51b22', dark:'#9c0f14' },
   vojvodina:{ kind:'stripes', base:'#ffffff', accent:'#b3122a', dark:'#7a0f1c' },
   newcastle:{ kind:'stripes', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
-  sunderland:{ kind:'stripes', base:'#ffffff', accent:'#eb172b', dark:'#8f0d1c' }
+  sunderland:{ kind:'stripes', base:'#ffffff', accent:'#eb172b', dark:'#8f0d1c' },
+  sociedad:{ kind:'stripes', base:'#ffffff', accent:'#0a3d8f', dark:'#062a63' },
+  espanyol:{ kind:'stripes', base:'#ffffff', accent:'#1c5fae', dark:'#0f3a6e' },
+  atalanta:{ kind:'stripes', base:'#1b1b1b', accent:'#0f66b0', dark:'#000000' },
+  sampdoria:{ kind:'band',   base:'#0f2350', accent:'#c8102e', dark:'#081a3a', band:.22, edge:'#ffffff' },
+  bologna: { kind:'stripes', base:'#1c3f7a', accent:'#c8102e', dark:'#0f2350' },
+  nice:    { kind:'diagonal', base:'#1b1b1b', accent:'#c8102e', dark:'#7a0d1c' },
+  celtic:  { kind:'hoops',   base:'#ffffff', accent:'#018749', dark:'#004d2b' },
+  brugge:  { kind:'stripes', base:'#1b1b1b', accent:'#0057b8', dark:'#000000' },
+  galatasaray:{ kind:'halves', base:'#f5c400', accent:'#a90432', dark:'#7a0322' },
+  fenerbahce:{ kind:'stripes', base:'#0a2f6b', accent:'#ffd400', dark:'#051a3d' },
+  besiktas:{ kind:'stripes', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
+  olympiacos:{ kind:'hoops', base:'#ffffff', accent:'#c8102e', dark:'#8f0d1c' }
 };
 const DIAG = Math.tan(35 * Math.PI / 180); // Monaco's split, red above a line rising to the right
 // One place both canvases paint a patterned kit, so a new `kind` only has to be taught once.
@@ -665,7 +699,7 @@ function patternFill(g, st, x, y, w, h){
     return `<pattern id="kit-${t}" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${body}</pattern>`;
   }).join('');
 })();
-const SLEEVED = ['claret','amber','scarlet','lion','frankfurt','villa'];
+const SLEEVED = ['claret','amber','scarlet','lion','frankfurt','villa','leverkusen'];
 if (!TEAMS[S.team]) S.team = 'blue';
 // Some kits are pale (white, gold, sky), so anything drawn on top of one needs dark ink.
 function lightHex(h){
