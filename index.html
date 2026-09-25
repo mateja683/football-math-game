@@ -569,7 +569,23 @@ const TEAMS = {
   juve:    {name:'Juventus',          land:'Italy',    fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']},
   roma:    {name:'Roma',              land:'Italy',    fam:'claret', main:'#8e1f2f', trim:'#f0bc42', confetti:['#8e1f2f','#f0bc42','#ffffff']},
   lazio:   {name:'Lazio',             land:'Italy',    fam:'sky',    main:'#87d8f7', trim:'#ffffff', confetti:['#87d8f7','#ffffff','#1c2c5b']},
-  napoli:  {name:'Napoli',            land:'Italy',    fam:'sky',    main:'#12a0d7', trim:'#ffffff', confetti:['#12a0d7','#ffffff']}
+  napoli:  {name:'Napoli',            land:'Italy',    fam:'sky',    main:'#12a0d7', trim:'#ffffff', confetti:['#12a0d7','#ffffff']},
+  realmadrid:{name:'Real Madrid',     land:'Spain',    fam:'white',  main:'#f4f4f4', trim:'#3d2c6d', confetti:['#ffffff','#3d2c6d'], say:'Ray-al Madrid'},
+  fiorentina:{name:'Fiorentina',      land:'Italy',    fam:'purple', main:'#5b2a86', trim:'#ffffff', confetti:['#5b2a86','#ffffff'], say:'Fee-o-wren-teena'},
+  schalke: {name:'Schalke',           land:'Germany',  fam:'blue',   main:'#0059a3', trim:'#ffffff', confetti:['#0059a3','#ffffff'], say:'Shal-keh'},
+  hamburg: {name:'Hamburg',           land:'Germany',  fam:'white',  main:'#f4f4f4', trim:'#0f2d5e', confetti:['#ffffff','#0f2d5e']},
+  stuttgart:{name:'Stuttgart',        land:'Germany',  fam:'white',  main:'#f4f4f4', trim:'#e2231a', confetti:['#ffffff','#e2231a']},
+  bremen:  {name:'Werder Bremen',     land:'Germany',  fam:'green',  main:'#009640', trim:'#ffffff', confetti:['#009640','#ffffff'], say:'Vair-der Bremen'},
+  frankfurt:{name:'Eintracht Frankfurt', land:'Germany', fam:'black', main:'#1b1b1b', trim:'#e2001a', confetti:['#1b1b1b','#e2001a','#ffffff'], say:'Ein-trakt Frankfurt'},
+  lille:   {name:'Lille',             land:'France',   fam:'red',    main:'#c8102e', trim:'#132257', confetti:['#c8102e','#132257','#ffffff'], say:'Leel'},
+  vojvodina:{name:'Vojvodina',        land:'Serbia',   fam:'red',    main:'#b3122a', trim:'#ffffff', confetti:['#b3122a','#ffffff'], say:'Voy-vo-dee-na'},
+  villa:   {name:'Aston Villa',       land:'England',  fam:'claret', main:'#670e36', trim:'#4c7ea8', confetti:['#670e36','#4c7ea8','#ffffff']},
+  wolves:  {name:'Wolves',            land:'England',  fam:'amber',  main:'#f5a300', trim:'#1b1b1b', confetti:['#f5a300','#1b1b1b','#ffffff']},
+  leeds:   {name:'Leeds',             land:'England',  fam:'white',  main:'#f4f4f4', trim:'#0033a0', confetti:['#ffffff','#0033a0','#ffcd00']},
+  newcastle:{name:'Newcastle',        land:'England',  fam:'black',  main:'#1b1b1b', trim:'#ffffff', confetti:['#1b1b1b','#ffffff']},
+  forest:  {name:'Nottingham Forest', land:'England',  fam:'red',    main:'#dd0000', trim:'#ffffff', confetti:['#dd0000','#ffffff']},
+  sunderland:{name:'Sunderland',      land:'England',  fam:'red',    main:'#eb172b', trim:'#ffffff', confetti:['#eb172b','#ffffff']},
+  fulham:  {name:'Fulham',            land:'England',  fam:'white',  main:'#f4f4f4', trim:'#1b1b1b', confetti:['#ffffff','#1b1b1b']}
 };
 // The order the kit grid's country headings appear in.
 const LANDS = ['England','Spain','Italy','Germany','France','Portugal','Netherlands','Serbia'];
@@ -594,7 +610,10 @@ const PATTERNED = {
   ajax:    { kind:'band',     base:'#ffffff', accent:'#d2122e', dark:'#8f0d1c', band:.36 },
   psg:     { kind:'band',     base:'#004170', accent:'#da291c', dark:'#00213a', band:.24, edge:'#ffffff' },
   sporting:{ kind:'hoops',    base:'#ffffff', accent:'#008057', dark:'#004d34' },
-  monaco:  { kind:'diagonal', base:'#ffffff', accent:'#e51b22', dark:'#9c0f14' }
+  monaco:  { kind:'diagonal', base:'#ffffff', accent:'#e51b22', dark:'#9c0f14' },
+  vojvodina:{ kind:'stripes', base:'#ffffff', accent:'#b3122a', dark:'#7a0f1c' },
+  newcastle:{ kind:'stripes', base:'#ffffff', accent:'#1b1b1b', dark:'#000000' },
+  sunderland:{ kind:'stripes', base:'#ffffff', accent:'#eb172b', dark:'#8f0d1c' }
 };
 const DIAG = Math.tan(35 * Math.PI / 180); // Monaco's split, red above a line rising to the right
 // One place both canvases paint a patterned kit, so a new `kind` only has to be taught once.
@@ -646,7 +665,7 @@ function patternFill(g, st, x, y, w, h){
     return `<pattern id="kit-${t}" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${body}</pattern>`;
   }).join('');
 })();
-const SLEEVED = ['claret','amber','scarlet','lion'];
+const SLEEVED = ['claret','amber','scarlet','lion','frankfurt','villa'];
 if (!TEAMS[S.team]) S.team = 'blue';
 // Some kits are pale (white, gold, sky), so anything drawn on top of one needs dark ink.
 function lightHex(h){
