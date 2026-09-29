@@ -95,7 +95,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 /* absolutely positioned, not height:100% - .canvasbox is a flex item with no definite
    height, so a percentage height never resolved and the canvas only covered the top of
    the white pad, leaving most of it dead to the touch */
-#wc{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#wc,#nc{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .kickoff:active,.big:active{transform:translateY(5px);box-shadow:0 2px 0 #a88700}
 .spacer{height:26px}
 .prizebtn{width:100%;min-height:60px;border-radius:22px;background:var(--chalk);color:var(--ink);font-size:24px;font-weight:800;
@@ -147,6 +147,22 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .countbtn{margin:0 auto 12px;padding:6px 20px;border-radius:999px;background:var(--glass);font-size:20px;font-weight:700}
 .countbtn.nudge{animation:nudge 1s ease-in-out 2}
 @keyframes nudge{50%{transform:scale(1.12);background:var(--glass2)}}
+/* "Write the answer": a pen pad where the answer buttons would be. Smaller balls on the stage
+   so a 20-ball frame and the pad both fit on a phone. */
+.stage.pen{min-height:120px}
+.stage.pen .frame{--b:clamp(24px,7vw,38px);gap:4px}
+.penarea{display:flex;flex-direction:column}
+.penarea .canvasbox{flex:none;height:clamp(130px,21dvh,240px);min-height:0;margin:0 0 8px}
+@media (max-height:720px){.penarea .canvasbox{height:118px}}
+.penarea .hintword{top:50%;transform:translateY(-50%);font-size:clamp(80px,24vw,150px)}
+/* the tools sit in the pad's top corners rather than a row of their own, so the whole
+   question still fits on a small phone without scrolling */
+.pentool{position:absolute;top:6px;z-index:1;padding:4px 12px;border-radius:999px;font-size:16px;font-weight:700;
+  background:rgba(18,48,26,.1);color:var(--ink)}
+.pentool.l{left:6px}.pentool.r{right:6px}
+.penrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px}
+.penrow .big,.penrow .plain{min-height:58px;font-size:24px}
+.penarea .canvasbox.miss{animation:wiggle .45s}
 .answers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 6px}
 .ans{aspect-ratio:1;border-radius:50%;background:var(--chalk);color:var(--ink);font-size:clamp(44px,14vw,68px);font-weight:800;
   box-shadow:0 7px 0 rgba(0,0,0,.28);line-height:1}
@@ -340,6 +356,10 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
       <button class="chip mode" data-mode="make">Make 20</button>
       <button class="chip mode" data-mode="share">Sharing</button>
     </div>
+    <h3 class="label sub">Writing numbers</h3>
+    <div class="chips">
+      <button class="chip mode" data-mode="pen">Write the answer</button>
+    </div>
   </div>
 
   <h2 class="label">Prize match controls</h2>
@@ -425,6 +445,18 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   <div class="stage" id="stage"></div>
   <button class="countbtn" id="countbtn">Count with me</button>
   <div class="answers" id="answers"></div>
+  <div class="penarea" id="penArea" hidden>
+    <div class="canvasbox" id="penBox">
+      <p class="hintword" id="penHint" hidden>7</p>
+      <canvas id="nc" aria-label="Write the answer here"></canvas>
+      <button class="pentool l" id="penShow">Show me</button>
+      <button class="pentool r" id="penClear">Clear</button>
+    </div>
+    <div class="penrow">
+      <button class="big" id="penRight">✓ Right</button>
+      <button class="plain" id="penAgain">Try again</button>
+    </div>
+  </div>
 </main>
 
 <!-- END -->
@@ -504,7 +536,10 @@ const PRIZE_THRESHOLD = ROUND_LEN - 1;
 const prizeEarned = (hits, total) => hits >= total - 1; // perfect, or perfect but one
 const MAX_NUM = 20;
 const ALL_MODES = ['count','flash','more','bigger','smaller','oneless','findnum','next','ordinal',
-                   'add','take','double','score','make10','make','share'];
+                   'add','take','double','score','make10','make','share','pen'];
+// "Write the answer" borrows a question from one of these and has it written with a pen instead
+// of tapped: each has a numeric answer and a stage that still fits above the writing pad.
+const PEN_FROM = ['count','add','take','double','oneless','next','make10','make'];
 const ORDINALS = ['first','second','third'];
 const SESSION_LIMIT_MS = 20 * 60 * 1000;
 
@@ -1003,8 +1038,12 @@ $('#gateCancel').onclick = () => { gateCb = null; show(gateBack); };
 // rather than a question, so every mode starts well above one. MIN_NUM is the smallest
 // number a question is ever built around.
 const MIN_NUM = 3;
-function make(){
-  const max = MAX_NUM, mode = pick(activeModes());
+function make(mode = pick(activeModes())){
+  if (mode === 'pen'){
+    const q = make(pick(PEN_FROM));
+    return {...q, pen:true, key:'w' + q.key, say:`${q.say} Write the answer.`};
+  }
+  const max = MAX_NUM;
   if (mode === 'count'){
     const n = ri(MIN_NUM + 2, max);
     return {mode, key:'c'+n, n, ans:n, text:'How many balls?', say:'How many balls can you count?', win:`Goal! ${n} ${n === 1 ? 'ball' : 'balls'}!`};
@@ -1168,6 +1207,14 @@ function next(){
   else if (q.mode === 'add') stage.innerHTML = frame(q.a) + '<div class="plus" aria-hidden="true">+</div>' + frame(q.b);
   else if (q.mode === 'take') stage.innerHTML = frame(q.n, q.k);
 
+  stage.classList.toggle('pen', !!q.pen);
+  $('#penArea').hidden = !q.pen;
+  if (q.pen){
+    numeric = false;
+    $('#penHint').textContent = q.ans; $('#penHint').hidden = true;
+    $('#penBox').classList.remove('miss');
+    NPad.dims(); NPad.clear();
+  }
   stage.querySelectorAll('[data-v]').forEach(g => g.onclick = () => answer(isNaN(+g.dataset.v) ? g.dataset.v : +g.dataset.v, g));
   if (numeric){
     answers.innerHTML = options(q.ans, q.hi || MAX_NUM).map(v => `<button class="ans" data-v="${v}">${v}</button>`).join('');
@@ -1205,6 +1252,9 @@ function answer(v, el){
   }
   if (!S.missed){ S.missed = true; save(); streakBar(); }
   el.classList.remove('miss'); void el.offsetWidth; el.classList.add('miss'); el.disabled = true;
+  nearly();
+}
+function nearly(){
   const m = S.q.mode;
   if (m === 'more') speak('Nearly! Count the shirts and try again.');
   else if (m === 'bigger' || m === 'smaller') speak('Nearly! Try the other one.');
@@ -1455,41 +1505,47 @@ if (recognizer){
 /* ---------- writing game ---------- */
 const WRITE_WORDS = WORDS3; // three letters max - writing a word by hand is much harder than reading one
 const WR = { count:0, hits:0, missed:false, word:null, lastWord:null };
-const wc = $('#wc'), wg = wc.getContext('2d');
-let wDrawing = false, wLastX = 0, wLastY = 0;
-// The pad's box changes size after the web font loads, when the phone's address bar
-// collapses and on rotation. If the bitmap isn't resized with it the drawing surface ends up
-// squashed into part of the white area - which is why only the middle of the pad used to work.
-function wDims(){
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.round(wc.clientWidth), h = Math.round(wc.clientHeight);
-  if (w < 1 || h < 1) return;
-  if (wc.width === w * dpr && wc.height === h * dpr) return;
-  let keep = null;
-  if (wc.width && wc.height){
-    keep = document.createElement('canvas'); keep.width = wc.width; keep.height = wc.height;
-    keep.getContext('2d').drawImage(wc, 0, 0);
+// A freehand pen pad on a canvas: the writing game's word pad, and the maths "Write the answer"
+// pad. `live()` says whether its screen is showing, so a hidden pad is never measured at 0x0.
+function inkPad(cv, live){
+  const g = cv.getContext('2d');
+  let drawing = false, lastX = 0, lastY = 0;
+  // The pad's box changes size after the web font loads, when the phone's address bar
+  // collapses and on rotation. If the bitmap isn't resized with it the drawing surface ends up
+  // squashed into part of the white area - which is why only the middle of the pad used to work.
+  function dims(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(cv.clientWidth), h = Math.round(cv.clientHeight);
+    if (w < 1 || h < 1) return;
+    if (cv.width === w * dpr && cv.height === h * dpr) return;
+    let keep = null;
+    if (cv.width && cv.height){
+      keep = document.createElement('canvas'); keep.width = cv.width; keep.height = cv.height;
+      keep.getContext('2d').drawImage(cv, 0, 0);
+    }
+    cv.width = w * dpr; cv.height = h * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.lineWidth = 8; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#12301a';
+    if (keep) g.drawImage(keep, 0, 0, w, h); // keep whatever the child has already written
   }
-  wc.width = w * dpr; wc.height = h * dpr;
-  wg.setTransform(dpr, 0, 0, dpr, 0, 0);
-  wg.lineWidth = 8; wg.lineCap = 'round'; wg.lineJoin = 'round'; wg.strokeStyle = '#12301a';
-  if (keep) wg.drawImage(keep, 0, 0, w, h); // keep whatever the child has already written
+  function clear(){ g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.restore(); }
+  cv.addEventListener('pointerdown', e => {
+    drawing = true; const r = cv.getBoundingClientRect();
+    lastX = e.clientX - r.left; lastY = e.clientY - r.top;
+    try { cv.setPointerCapture(e.pointerId); } catch(err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    g.beginPath(); g.moveTo(lastX, lastY); g.lineTo(x, y); g.stroke();
+    lastX = x; lastY = y;
+  });
+  ['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, () => drawing = false));
+  addEventListener('resize', () => { if (live()) dims(); });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (live()) dims(); }).observe(cv);
+  return {dims, clear};
 }
-function wClear(){ wg.save(); wg.setTransform(1, 0, 0, 1, 0, 0); wg.clearRect(0, 0, wc.width, wc.height); wg.restore(); }
-wc.addEventListener('pointerdown', e => {
-  wDrawing = true; const r = wc.getBoundingClientRect();
-  wLastX = e.clientX - r.left; wLastY = e.clientY - r.top;
-  try { wc.setPointerCapture(e.pointerId); } catch(err) {}
-});
-wc.addEventListener('pointermove', e => {
-  if (!wDrawing) return;
-  const r = wc.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-  wg.beginPath(); wg.moveTo(wLastX, wLastY); wg.lineTo(x, y); wg.stroke();
-  wLastX = x; wLastY = y;
-});
-['pointerup','pointercancel'].forEach(ev => wc.addEventListener(ev, () => wDrawing = false));
-addEventListener('resize', () => { if (!$('#writing').hidden) wDims(); });
-if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#writing').hidden) wDims(); }).observe(wc);
+const WPad = inkPad($('#wc'), () => !$('#writing').hidden);
 
 function writeSlots(){
   $('#writeSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < WR.count ? ' on' : ''}">${i < WR.count ? '✏️' : ''}</span>`).join('');
@@ -1498,14 +1554,14 @@ function writeSlots(){
 function writeStart(){
   if (S.locked) return;
   WR.count = 0; WR.hits = 0; WR.lastWord = null;
-  writeSlots(); show('writing'); wDims(); writeNext();
+  writeSlots(); show('writing'); WPad.dims(); writeNext();
 }
 function writeNext(){
   let w; do { w = pick(WRITE_WORDS); } while (w.w === WR.lastWord && WRITE_WORDS.length > 1);
   WR.lastWord = w.w; WR.word = w; WR.missed = false;
   $('#writePic').textContent = w.e;
   $('#writeWord').textContent = w.w; $('#writeWord').hidden = true;
-  wClear();
+  WPad.clear();
 }
 function writeMark(correct){
   if (correct){
@@ -1517,14 +1573,41 @@ function writeMark(correct){
   } else {
     WR.missed = true;
     speak('Have another go.');
-    wClear();
+    WPad.clear();
   }
 }
 $('#writeHint').onclick = () => { $('#writeWord').hidden = !$('#writeWord').hidden; };
-$('#writeClear').onclick = wClear;
+$('#writeClear').onclick = WPad.clear;
 $('#writeRight').onclick = () => writeMark(true);
 $('#writeAgain').onclick = () => writeMark(false);
 $('#writingHome').onclick = () => { hush(); show('category'); };
+
+/* ---------- maths: write the answer ---------- */
+// No handwriting recognition, same as the writing game: the grown-up checks the number and taps.
+// "Show me" puts the answer faintly behind the pad to trace, which counts as help, so like a
+// "Try again" it keeps that question out of the first-time-right streak.
+const NPad = inkPad($('#nc'), () => !$('#play').hidden && !$('#penArea').hidden);
+function penMiss(){
+  if (!S.missed){ S.missed = true; save(); streakBar(); }
+}
+$('#penRight').onclick = () => {
+  if (S.busy || !S.q?.pen) return;
+  if (!S.missed) S.streak++;
+  save(); streakBar(); goal($('#penBox'));
+};
+$('#penAgain').onclick = () => {
+  if (S.busy || !S.q?.pen) return;
+  penMiss(); NPad.clear();
+  const box = $('#penBox'); box.classList.remove('miss'); void box.offsetWidth; box.classList.add('miss');
+  nearly();
+};
+$('#penShow').onclick = () => {
+  if (S.busy || !S.q?.pen) return;
+  const h = $('#penHint');
+  if (h.hidden) penMiss();
+  h.hidden = !h.hidden;
+};
+$('#penClear').onclick = NPad.clear;
 
 /* ---------- prize match: two-player football ---------- */
 const Pong = (() => {
