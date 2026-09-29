@@ -149,11 +149,12 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 @keyframes nudge{50%{transform:scale(1.12);background:var(--glass2)}}
 /* "Write the answer": a pen pad where the answer buttons would be. Smaller balls on the stage
    so a 20-ball frame and the pad both fit on a phone. */
+.penq{font-size:20px;font-weight:700;text-align:center;margin:2px 0 0;opacity:.9;line-height:1.1}
 .stage.pen{min-height:120px}
 .stage.pen .frame{--b:clamp(24px,7vw,38px);gap:4px}
 .penarea{display:flex;flex-direction:column}
-.penarea .canvasbox{flex:none;height:clamp(130px,21dvh,240px);min-height:0;margin:0 0 8px}
-@media (max-height:720px){.penarea .canvasbox{height:118px}}
+.penarea .canvasbox{flex:none;height:clamp(120px,19dvh,240px);min-height:0;margin:0 0 8px}
+@media (max-height:720px){.penarea .canvasbox{height:108px}}
 .penarea .hintword{top:50%;transform:translateY(-50%);font-size:clamp(80px,24vw,150px)}
 /* the tools sit in the pad's top corners rather than a row of their own, so the whole
    question still fits on a small phone without scrolling */
@@ -441,6 +442,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <path d="M10 95 V8 H290 V95" fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>
   <p class="question" id="qtext"></p>
+  <p class="penq" id="penQ" hidden>✏️ Write the answer</p>
   <div class="eq" id="eq"></div>
   <div class="stage" id="stage"></div>
   <button class="countbtn" id="countbtn">Count with me</button>
@@ -1208,7 +1210,7 @@ function next(){
   else if (q.mode === 'take') stage.innerHTML = frame(q.n, q.k);
 
   stage.classList.toggle('pen', !!q.pen);
-  $('#penArea').hidden = !q.pen;
+  $('#penArea').hidden = !q.pen; $('#penQ').hidden = !q.pen;
   if (q.pen){
     numeric = false;
     $('#penHint').textContent = q.ans; $('#penHint').hidden = true;
