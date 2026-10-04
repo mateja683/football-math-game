@@ -1409,25 +1409,56 @@ const WORDS3 = [
   {w:'leg', e:'🦵'}, {w:'ear', e:'👂'}, {w:'eye', e:'👁️'},
   {w:'run', e:'🏃'}, {w:'ski', e:'🎿'}, {w:'hug', e:'🤗'}, {w:'nap', e:'😴'}, {w:'sad', e:'😢'}
 ];
+// Reading only - nothing shows these words' emoji at the moment, so these banks lean on words a
+// four-year-old can sound out (adjacent consonants, and digraphs like sh, ch, th, ee, ai, oa, oo,
+// ar, or) rather than on what has the best picture. A few trickier familiar words (lion, cake,
+// horse, whale) stay in because he knows them. Keep each emoji unique anyway, in case one is shown.
 const WORDS4 = [
-  {w:'frog', e:'🐸'}, {w:'fish', e:'🐟'}, {w:'lion', e:'🦁'}, {w:'bird', e:'🐦'}, {w:'star', e:'⭐'},
-  {w:'moon', e:'🌙'}, {w:'book', e:'📖'}, {w:'cake', e:'🎂'}, {w:'duck', e:'🦆'}, {w:'crab', e:'🦀'},
-  {w:'kite', e:'🪁'}, {w:'leaf', e:'🍃'}, {w:'tree', e:'🌳'}, {w:'boat', e:'⛵'}
+  // animals
+  {w:'frog', e:'🐸'}, {w:'fish', e:'🐟'}, {w:'lion', e:'🦁'}, {w:'bird', e:'🐦'}, {w:'duck', e:'🦆'},
+  {w:'crab', e:'🦀'}, {w:'goat', e:'🐐'}, {w:'nest', e:'🪺'},
+  // football
+  {w:'goal', e:'⚽'}, {w:'boot', e:'👢'}, {w:'flag', e:'🚩'},
+  // things about the house
+  {w:'book', e:'📖'}, {w:'bath', e:'🛁'}, {w:'soap', e:'🧼'}, {w:'lock', e:'🔒'}, {w:'bulb', e:'💡'},
+  {w:'bell', e:'🔔'}, {w:'fork', e:'🍴'}, {w:'ring', e:'💍'}, {w:'coin', e:'🪙'}, {w:'gift', e:'🎁'},
+  {w:'drum', e:'🥁'}, {w:'kite', e:'🪁'},
+  // things to wear
+  {w:'sock', e:'🧦'}, {w:'coat', e:'🧥'},
+  // things to eat
+  {w:'cake', e:'🎂'}, {w:'milk', e:'🥛'}, {w:'corn', e:'🌽'},
+  // out and about
+  {w:'star', e:'⭐'}, {w:'moon', e:'🌙'}, {w:'tree', e:'🌳'}, {w:'leaf', e:'🍃'}, {w:'rain', e:'🌧️'},
+  {w:'boat', e:'⛵'}, {w:'ship', e:'🚢'}, {w:'tent', e:'⛺'},
+  // bodies and doing things
+  {w:'hand', e:'✋'}, {w:'foot', e:'🦶'}, {w:'swim', e:'🏊'}, {w:'clap', e:'👏'}
 ];
-const WORDS5 = [ // not drawn on at the moment: reading is 3-4 letters, writing is 3
-
+const WORDS5 = [
+  // animals
   {w:'horse', e:'🐴'}, {w:'sheep', e:'🐑'}, {w:'zebra', e:'🦓'}, {w:'snake', e:'🐍'}, {w:'shark', e:'🦈'},
-  {w:'mouse', e:'🐭'}, {w:'whale', e:'🐳'}, {w:'apple', e:'🍎'}, {w:'grape', e:'🍇'}, {w:'clock', e:'🕐'},
-  {w:'chair', e:'🪑'}, {w:'plane', e:'✈️'}
+  {w:'mouse', e:'🐭'}, {w:'whale', e:'🐳'}, {w:'chick', e:'🐤'}, {w:'snail', e:'🐌'},
+  // football
+  {w:'shirt', e:'👕'},
+  // things about the house
+  {w:'clock', e:'🕐'}, {w:'chair', e:'🪑'}, {w:'spoon', e:'🥄'}, {w:'broom', e:'🧹'}, {w:'brush', e:'🖌️'},
+  {w:'torch', e:'🔦'}, {w:'plant', e:'🪴'}, {w:'shell', e:'🐚'},
+  // things to wear
+  {w:'dress', e:'👗'}, {w:'crown', e:'👑'},
+  // things to eat
+  {w:'apple', e:'🍎'}, {w:'grape', e:'🍇'}, {w:'sweet', e:'🍬'},
+  // out and about
+  {w:'plane', e:'✈️'}, {w:'train', e:'🚆'}, {w:'truck', e:'🚚'}, {w:'cloud', e:'☁️'}, {w:'storm', e:'⛈️'},
+  // people and bodies
+  {w:'queen', e:'👸'}, {w:'teeth', e:'🦷'}
 ];
 const WORD_ROUND = 8;
 
 /* ---------- reading game ---------- */
-// Pick the length first, then the word: WORDS3 is now much the bigger bank, and picking flat
-// from both would turn the reading game into mostly three-letter words. An even split is what
-// it always was in practice, back when the two banks were the same size.
-const READ_BANKS = [WORDS3, WORDS4];
-const READ_WORDS = [...WORDS3, ...WORDS4];
+// Pick the length first, then the word: the banks are different sizes (WORDS3 is the biggest,
+// since writing draws on it too), and picking flat from all of them would skew the reading game
+// towards three-letter words. This way it's a third each of 3, 4 and 5 letters.
+const READ_BANKS = [WORDS3, WORDS4, WORDS5];
+const READ_WORDS = [...WORDS3, ...WORDS4, ...WORDS5];
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizer = null;
 if (SR) {
