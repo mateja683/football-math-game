@@ -2060,6 +2060,48 @@ const Pong = (() => {
       g.beginPath(); g.arc(m.x + m.kdir * bw, m.y + bh * .44, rad * .5 * (1.7 - m.kick * 3), 0, Math.PI * 2); g.stroke();
     }
   }
+  /* ----- the three-a-side keeper: a person, not a rod figure. Same blocking width as ever -
+     his arms reach exactly padWEff across at p.y, gloves on the ends, so what you see is what saves. ----- */
+  function drawKeeper(p){
+    const team = p.team, st = PATTERNED[team], ink = st ? st.dark : TEAMS[team].trim;
+    const rad = manR, bw = rad * 1.25, bh = rad * 1.35, hr = rad * .52, half = padWEff / 2;
+    // drawing-only state: shuffle the feet by how far he's moved, lean into a dive
+    const moved = p.x - (p.lastX ?? p.x); p.lastX = p.x;
+    p.step = (p.step || 0) + Math.abs(moved) / (rad * .5);
+    p.lean = (p.lean || 0) * .8 + clamp(moved * .04, -.22, .22) * .2;
+    const sy = p.y, by = sy - bh * .18, sw = Math.sin(p.step) * rad * .3;
+    g.fillStyle = 'rgba(0,0,0,.22)';
+    g.beginPath(); g.ellipse(p.x, by + bh + rad * .7, rad * .9, rad * .3, 0, 0, Math.PI * 2); g.fill();
+    g.save(); g.translate(p.x, sy); g.rotate(p.lean); g.translate(-p.x, -sy);
+    g.lineCap = 'round'; g.strokeStyle = '#2b2b2b'; g.lineWidth = rad * .32;   // legs, knees bent wide
+    [-1, 1].forEach(k => {
+      g.beginPath(); g.moveTo(p.x + k * bw * .28, by + bh * .85);
+      g.lineTo(p.x + k * bw * .62, by + bh * 1.15 + k * sw * .4);
+      g.lineTo(p.x + k * bw * .55 + k * sw * .3, by + bh * 1.5); g.stroke();
+    });
+    g.restore();
+    g.lineCap = 'round'; g.strokeStyle = ink; g.lineWidth = rad * .28;        // arms, out to the full reach
+    const gr = Math.max(rad * .38, padH * .5);
+    g.beginPath(); g.moveTo(p.x - half + gr * .6, sy); g.lineTo(p.x + half - gr * .6, sy); g.stroke();
+    [-1, 1].forEach(k => {                                                    // big gloves
+      const gx = p.x + k * (half - gr * .6);
+      g.fillStyle = '#c6f03c'; g.beginPath(); g.arc(gx, sy, gr, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 2.5; g.strokeStyle = 'rgba(18,48,26,.7)'; g.stroke();
+      g.fillStyle = '#c6f03c'; g.beginPath(); g.arc(gx - k * gr * .55, sy - gr * .8, gr * .42, 0, Math.PI * 2); g.fill(); g.stroke(); // thumb
+    });
+    g.save(); g.translate(p.x, sy); g.rotate(p.lean); g.translate(-p.x, -sy);
+    const bx = p.x - bw / 2;                                                  // shirt
+    g.save(); rr(bx, by, bw, bh, rad * .34); g.clip(); kitFill(team, bx, by, bw, bh); g.restore();
+    rr(bx, by, bw, bh, rad * .34); g.lineWidth = 2.5; g.strokeStyle = ink; g.stroke();
+    const hy = by - hr * .78;                                                 // head, with a face
+    g.beginPath(); g.arc(p.x, hy, hr, 0, Math.PI * 2);
+    g.fillStyle = '#f1c79b'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = 'rgba(18,48,26,.65)'; g.stroke();
+    g.beginPath(); g.arc(p.x, hy - hr * .15, hr, Math.PI * 1.05, Math.PI * 1.95); g.lineWidth = hr * .45; g.strokeStyle = '#4a3020'; g.stroke(); // hair
+    g.fillStyle = '#2b2b2b';
+    [-1, 1].forEach(k => { g.beginPath(); g.arc(p.x + k * hr * .35, hy + hr * .05, Math.max(1.2, hr * .12), 0, Math.PI * 2); g.fill(); });
+    g.beginPath(); g.arc(p.x, hy + hr * .3, hr * .32, .15 * Math.PI, .85 * Math.PI); g.lineWidth = Math.max(1.2, hr * .1); g.strokeStyle = '#2b2b2b'; g.stroke();
+    g.restore();
+  }
   function drawStrikers(p){
     for (let k = -1; k <= 1; k++) figure(p.team, p.x + k * rowGap, p.oy, rowWEff, false);
   }
@@ -2096,8 +2138,7 @@ const Pong = (() => {
       if (variant === 'squad'){
         mates.forEach(drawMan);
         drawMan(men.top); drawMan(men.bot);   // yours on top of the AI, so he's never hidden
-        figure(pads.top.team, pads.top.x, pads.top.y, padWEff, true);
-        figure(pads.bot.team, pads.bot.x, pads.bot.y, padWEff, true);
+        drawKeeper(pads.top); drawKeeper(pads.bot);
       } else { drawPad(pads.top); drawPad(pads.bot); }
     }
     drawScore('top', score.top); drawScore('bot', score.bot);
