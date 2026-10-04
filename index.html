@@ -71,6 +71,24 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   display:flex;flex-direction:column;align-items:center;gap:10px;font-size:26px;font-weight:800}
 .catcard:active{transform:translateY(3px)}
 .caticon{font-size:64px;line-height:1}
+/* four subjects on the menu, two by two, so it still fits a phone without scrolling */
+.catgrid.four{grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+.catgrid.four .catcard{padding:20px 8px;font-size:21px;line-height:1.15;text-align:center;gap:8px}
+.catgrid.four .caticon{font-size:52px}
+.catcard small{font-size:17px;font-weight:700;opacity:.8}
+
+/* ---------- Serbian ---------- */
+.title.sr span{font-size:.62em;opacity:.85}
+.srcard{background:var(--chalk);color:var(--ink);border-radius:22px;padding:6px 16px 10px;margin:8px auto 0;min-width:62%;
+  display:flex;flex-direction:column;align-items:center;box-shadow:0 6px 0 rgba(0,0,0,.25);text-align:center}
+.srcard .who{font-size:16px;font-weight:700;opacity:.65}
+.srcard .cyr{font-size:clamp(38px,11vw,56px);font-weight:800;line-height:1.05}
+.srcard .lat{font-size:clamp(26px,7.4vw,36px);font-weight:700;opacity:.75;line-height:1.1}
+.srbig{font-size:clamp(110px,34vw,170px);line-height:1}
+.srnum{font-size:clamp(64px,20vw,100px);font-weight:800;line-height:1}
+#srPicks{margin:auto 0}   /* in the middle of the space under the word, not stuck to the bottom */
+#srPicks .ans.hit{background:var(--yellow)}
+.srnote{font-size:18px;line-height:1.35;opacity:.85;margin:18px 0 0}
 
 /* ---------- reading / writing ---------- */
 .wordtext{font-size:clamp(56px,18vw,108px);font-weight:800;text-align:center;margin:10px 0;letter-spacing:1px}
@@ -282,10 +300,11 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 <main class="app" id="category">
   <h1 class="title">Goal<br>Maths</h1>
   <p class="lede">What would you like to play?</p>
-  <div class="catgrid">
+  <div class="catgrid four">
     <button class="catcard" id="goReading"><span class="caticon">📖</span><span>Reading games</span></button>
     <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
     <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
+    <button class="catcard" id="goSerbian"><span class="caticon">🇷🇸</span><span lang="sr">Srpski<br>Српски</span></button>
   </div>
 
   <h2 class="label">Teams</h2>
@@ -418,7 +437,39 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   </div>
 </main>
 
-<!-- READING / WRITING ROUND COMPLETE -->
+<!-- SERBIAN -->
+<main class="app" id="srMenu" hidden>
+  <div class="bar"><button class="iconbtn" id="srMenuBack" aria-label="Back to the menu">←</button></div>
+  <h1 class="title sr" lang="sr">Srpski<br><span>Српски</span></h1>
+  <div class="catgrid">
+    <button class="catcard" id="goSrWords"><span class="caticon">🗣️</span><span lang="sr">Reči · Речи</span><small>Words</small></button>
+    <button class="catcard" id="goSrNums"><span class="caticon">🔢</span><span lang="sr">Brojevi · Бројеви</span><small>Numbers</small></button>
+  </div>
+  <h2 class="label">Numbers up to</h2>
+  <div class="chips" id="srTopChips">
+    <button class="chip" data-top="10" aria-pressed="false">10</button>
+    <button class="chip" data-top="20" aria-pressed="false">20</button>
+  </div>
+  <p class="srnote" id="srVoiceNote"></p>
+</main>
+
+<main class="app" id="srPlay" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="srBack" aria-label="Back to the Serbian menu">←</button>
+    <div class="slots" id="srSlots" aria-label="Words done"></div>
+    <button class="iconbtn" id="srListen" aria-label="Hear it in Serbian" hidden>🔊</button>
+  </div>
+  <h2 class="label tight" style="text-align:center" id="srAsk">Listen and find it!</h2>
+  <div class="srcard" lang="sr"><span class="who" id="srWho" lang="en-GB">Grown-up, say:</span><span class="cyr" id="srCyr">лопта</span><span class="lat" id="srLat">lopta</span></div>
+  <div class="stage" id="srStage"></div>
+  <div class="answers" id="srPicks"></div>
+  <div class="judgebar" id="srJudge" hidden>
+    <button class="big" id="srRight">✓ Said it!</button>
+    <button class="plain" id="srAgain">Try again</button>
+  </div>
+</main>
+
+<!-- READING / WRITING / SERBIAN ROUND COMPLETE -->
 <main class="app end" id="wordEnd" hidden>
   <div class="trophy">🏆</div>
   <h1 id="wordEndTitle">Well done!</h1>
@@ -558,9 +609,11 @@ const S = {
   controls: saved.controls === 'buttons' ? 'buttons' : 'slide',
   trophies: saved.trophies && typeof saved.trophies === 'object' ? saved.trophies : {},
   keepyBest: saved.keepyBest || 0,
+  srTop: saved.srTop === 20 ? 20 : 10,
+  srKnow: saved.srKnow && typeof saved.srKnow === 'object' ? saved.srKnow : {},
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,srTop:S.srTop,srKnow:S.srKnow})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // Club names label the kits, but the kits themselves are still colours only - no crests,
@@ -894,7 +947,7 @@ function ping(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['category','teams','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','teams','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet','srMenu','srPlay'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#mini').hidden = id !== 'mini';
   $('#prizeEnd').hidden = S.prizes < 1;
@@ -915,6 +968,7 @@ function confetti(team){
 $('#goMath').onclick = () => show('start');
 $('#goReading').onclick = () => readStart();
 $('#goWriting').onclick = () => writeStart();
+$('#goSerbian').onclick = () => srMenu();
 $('#toCategory').onclick = () => show('category');
 $('#wordEndAgain').onclick = () => wordEndReplay && wordEndReplay();
 $('#wordEndBack').onclick = () => show('category');
@@ -926,12 +980,12 @@ function wordRoundDone(kind, hits, replay){
   else done();
 }
 function wordEnd(kind, hits, replay){
-  const reading = kind === 'reading';
-  $('#wordEndTitle').textContent = reading ? 'Well read!' : 'Well written!';
+  const [title, praise] = { reading: ['Well read!', 'Brilliant reading!'], writing: ['Well written!', 'Brilliant writing!'],
+    serbian: ['Bravo!', 'Brilliant Serbian!'] }[kind];
+  $('#wordEndTitle').textContent = title;
   $('#wordEndScore').textContent = `${hits}/${WORD_ROUND}`;
   $('#wordEndMsg').textContent = prizeEarned(hits, WORD_ROUND)
-    ? (reading ? 'Brilliant reading!' : 'Brilliant writing!')
-    : `${hits} out of ${WORD_ROUND} right first time. Great effort!`;
+    ? praise : `${hits} out of ${WORD_ROUND} right first time. Great effort!`;
   wordEndReplay = replay;
   show('wordEnd');
   whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
@@ -1615,6 +1669,152 @@ $('#writeClear').onclick = WPad.clear;
 $('#writeRight').onclick = () => writeMark(true);
 $('#writeAgain').onclick = () => writeMark(false);
 $('#writingHome').onclick = () => { hush(); show('category'); };
+
+/* ---------- Serbian: words and numbers ---------- */
+// For a child whose Serbian is still weak, so hearing comes before saying. Every word starts as
+// "find it": the grown-up says it, he taps the right picture out of three. After SR_LEARN
+// first-time finds it moves on to "say it": a picture, he says the Serbian word, the grown-up
+// marks it like the writing game. A "Try again" there drops it back to one more find.
+// The grown-up is the Serbian voice. iPhones and iPads have no Serbian voice built in, as far as
+// we could find, and a word read by an English voice would teach the wrong sounds. If a device
+// does have one, the 🔊 button appears and the words are spoken as well.
+// Every word is shown in both scripts, Cyrillic first. Ekavian forms, as said in Belgrade.
+// Latin to Cyrillic, one letter at a time - except lj, nj and dž, which are each one letter in
+// Cyrillic (љ, њ, џ). No word here has a place where those pairs are two separate letters.
+function toCyr(lat){
+  const two = {lj:'љ', nj:'њ', 'dž':'џ'};
+  const one = {a:'а',b:'б',v:'в',g:'г',d:'д','đ':'ђ',e:'е','ž':'ж',z:'з',i:'и',j:'ј',k:'к',l:'л',m:'м',n:'н',o:'о',p:'п',
+    r:'р',s:'с',t:'т','ć':'ћ',u:'у',f:'ф',h:'х',c:'ц','č':'ч','š':'ш'};
+  let out = '';
+  for (let i = 0; i < lat.length; i++){
+    const pair = lat.slice(i, i + 2).toLowerCase();
+    if (two[pair]){ out += two[pair]; i++; continue; }
+    const ch = lat[i], low = ch.toLowerCase(), c = one[low] || ch;
+    out += ch === low ? c : c.toUpperCase();
+  }
+  return out;
+}
+// In teaching order: the first few un-learnt words are the ones each round works on, so the
+// easy and familiar ones (football, pets, banana, auto) come first.
+const SR_WORDS = [
+  ['lopta','⚽'], ['gol','🥅'], ['pas','🐶'], ['mačka','🐱'], ['kuća','🏠'], ['auto','🚗'],
+  ['banana','🍌'], ['jabuka','🍎'], ['riba','🐟'], ['ptica','🐦'], ['sunce','☀️'], ['mleko','🥛'],
+  ['krava','🐮'], ['konj','🐴'], ['svinja','🐷'], ['ovca','🐑'], ['patka','🦆'], ['žaba','🐸'],
+  ['miš','🐭'], ['lav','🦁'], ['medved','🐻'], ['zec','🐰'],
+  ['hleb','🍞'], ['jaje','🥚'], ['sir','🧀'], ['torta','🎂'], ['sladoled','🍦'], ['kruška','🍐'],
+  ['grožđe','🍇'], ['jagoda','🍓'],
+  ['krevet','🛏️'], ['stolica','🪑'], ['knjiga','📖'], ['ključ','🔑'], ['sat','🕐'],
+  ['autobus','🚌'], ['voz','🚆'], ['avion','✈️'], ['brod','🚢'], ['bicikl','🚲'],
+  ['kapa','🧢'], ['majica','👕'], ['cipele','👟'],
+  ['mesec','🌙'], ['zvezda','⭐'], ['cvet','🌸'], ['drvo','🌳'], ['kiša','🌧️'], ['sneg','❄️'],
+  ['ruka','✋'], ['noga','🦵'], ['oko','👁️'], ['uvo','👂'], ['nos','👃']
+].map(([lat, e]) => ({ key: lat, lat, cyr: toCyr(lat), e }));
+const SR_NUMS = ['jedan','dva','tri','četiri','pet','šest','sedam','osam','devet','deset',
+  'jedanaest','dvanaest','trinaest','četrnaest','petnaest','šesnaest','sedamnaest','osamnaest','devetnaest','dvadeset']
+  .map((lat, i) => ({ key: 'n' + (i + 1), n: i + 1, lat, cyr: toCyr(lat) }));
+const SR_LEARN = 2;      // first-time finds before a word moves on from "find it" to "say it"
+const SR_NEW = 6;        // how many un-learnt words a round works on at once
+const SB = { kind: 'words', plan: [], count: 0, hits: 0, missed: false, item: null, mode: 'find', busy: false };
+
+const srVoice = () => voices.find(v => /^sr([-_]|$)/i.test(v.lang || '')) || null;
+// Queued after whatever English is being said, never cutting it off.
+function srSpeak(it){
+  const v = srVoice();
+  if (!it || !v || !S.voice) return;
+  try { const u = new SpeechSynthesisUtterance(it.cyr); u.lang = v.lang; u.voice = v; u.rate = .8; speechSynthesis.speak(u); } catch(e) {}
+}
+const srPool = () => SB.kind === 'words' ? SR_WORDS : SR_NUMS.slice(0, S.srTop);
+const srKnown = it => (S.srKnow[it.key] || 0) >= SR_LEARN;
+
+function srMenu(){
+  if (S.locked) return;
+  $$('#srTopChips .chip').forEach(c => c.setAttribute('aria-pressed', String(+c.dataset.top === S.srTop)));
+  const v = srVoice();
+  $('#srVoiceNote').textContent = v
+    ? `🔊 This device has a Serbian voice, so the words are spoken too.`
+    : `Grown-ups: this device has no Serbian voice, so you're the voice. Say each word out loud when it comes up.`;
+  show('srMenu');
+}
+// Up to five words still being learnt and the rest review; whichever runs short, the other fills in.
+// With nothing to review yet, the round is all learning and some words come up twice, which is
+// no bad thing.
+function srPlan(){
+  const pool = srPool();
+  const learning = shuffle(pool.filter(it => !srKnown(it)).slice(0, SR_NEW)), review = shuffle(pool.filter(srKnown));
+  const nNew = review.length ? Math.min(5, learning.length) : WORD_ROUND;
+  const plan = [];
+  for (let i = 0; i < WORD_ROUND; i++){
+    const from = (i < nNew && learning.length) || !review.length ? learning : review;
+    plan.push(from[i % from.length]);
+  }
+  let p = shuffle(plan);
+  for (let tries = 0; tries < 20 && p.some((it, i) => i && it === p[i - 1]); tries++) p = shuffle(plan);
+  return p;
+}
+function srSlots(){
+  $('#srSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < SB.count ? ' on' : ''}">${i < SB.count ? '⭐' : ''}</span>`).join('');
+  $('#srSlots').setAttribute('aria-label', `${SB.count} of ${WORD_ROUND} done`);
+}
+function srStart(kind){
+  if (S.locked) return;
+  SB.kind = kind; SB.count = 0; SB.hits = 0; SB.plan = srPlan();
+  srSlots(); show('srPlay'); srNext();
+}
+function srNext(){
+  const it = SB.plan[SB.count], words = SB.kind === 'words';
+  SB.item = it; SB.missed = false; SB.busy = false;
+  SB.mode = srKnown(it) ? 'say' : 'find';
+  const find = SB.mode === 'find';
+  $('#srCyr').textContent = it.cyr; $('#srLat').textContent = it.lat;
+  $('#srWho').textContent = find ? 'Grown-up, say:' : 'In Serbian:';
+  $('#srAsk').textContent = find ? 'Listen and find it!' : 'Say it in Serbian!';
+  $('#srListen').hidden = !srVoice();
+  $('#srJudge').hidden = find; $('#srPicks').hidden = !find; $('#srStage').hidden = find;
+  if (find){
+    $('#srStage').innerHTML = '';
+    const opts = [it, ...shuffle(srPool().filter(o => o !== it)).slice(0, 2)];
+    const order = words ? shuffle(opts) : opts.sort((a, b) => a.n - b.n);   // numbers in order, like the maths buttons
+    $('#srPicks').innerHTML = order.map(o => `<button class="ans" data-k="${o.key}" aria-label="${o.lat}">${words ? o.e : o.n}</button>`).join('');
+    $$('#srPicks .ans').forEach(b => b.onclick = () => srPick(b));
+  } else {
+    $('#srPicks').innerHTML = '';
+    $('#srStage').innerHTML = words ? `<div class="srbig" aria-hidden="true">${it.e}</div>` : `<div class="srnum">${it.n}</div>${frame(it.n)}`;
+  }
+  const what = words ? 'picture' : 'number';
+  speak(find ? (SB.count ? 'Find it!' : `Listen to the Serbian word, and find the ${what}!`) : 'Can you say it in Serbian?');
+  if (find) srSpeak(it);
+}
+function srGot(){
+  SB.busy = true; SB.count++;
+  if (!SB.missed){
+    SB.hits++;
+    if (SB.mode === 'find') S.srKnow[SB.item.key] = (S.srKnow[SB.item.key] || 0) + 1;
+    save();
+  }
+  srSlots(); cheer();
+  speak(pick(['Bravo!', 'Yes!', 'Well done!'])); srSpeak(SB.item);
+  if (SB.count >= WORD_ROUND){ setTimeout(() => wordRoundDone('serbian', SB.hits, () => srStart(SB.kind)), 900); return; }
+  setTimeout(srNext, 1100);
+}
+function srPick(b){
+  if (SB.busy || b.classList.contains('miss')) return;
+  if (b.dataset.k === SB.item.key){ b.classList.add('hit'); srGot(); return; }
+  SB.missed = true; b.classList.add('miss');
+  speak(pick(['Not that one. Listen again!', 'Have another go!'])); srSpeak(SB.item);
+}
+$('#srRight').onclick = () => { if (!SB.busy) srGot(); };
+$('#srAgain').onclick = () => {
+  if (SB.busy) return;
+  SB.missed = true;
+  S.srKnow[SB.item.key] = SR_LEARN - 1; save();   // one more find before it's asked for again
+  speak('Have another go.'); srSpeak(SB.item);
+};
+$('#srListen').onclick = () => { hush(); srSpeak(SB.item); };
+$('#srBack').onclick = () => { hush(); srMenu(); };
+$('#srMenuBack').onclick = () => show('category');
+$('#goSrWords').onclick = () => srStart('words');
+$('#goSrNums').onclick = () => srStart('nums');
+$$('#srTopChips .chip').forEach(c => c.onclick = () => { S.srTop = +c.dataset.top; save(); srMenu(); });
 
 /* ---------- maths: write the answer ---------- */
 // No handwriting recognition, same as the writing game: the grown-up checks the number and taps.
