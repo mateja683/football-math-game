@@ -1760,6 +1760,7 @@ const SR_NUMS = ['jedan','dva','tri','četiri','pet','šest','sedam','osam','dev
   .map((lat, i) => ({ key: 'n' + (i + 1), n: i + 1, lat, cyr: toCyr(lat) }));
 const SR_LEARN = 2;      // first-time finds before a word moves on from "find it" to "say it"
 const SR_NEW = 6;        // how many un-learnt words a round works on at once
+const SR_FOCUS = 3;      // of those, how many are the next in teaching order (the rest are from anywhere)
 const SR_HARD = 12;      // once this many words are known, "find it" has four pictures, all from nearby in the list
 const SB = { kind: 'words', plan: [], count: 0, hits: 0, missed: false, item: null, mode: 'find', busy: false };
 
@@ -1786,8 +1787,12 @@ function srMenu(){
 // With nothing to review yet, the round is all learning and some words come up twice, which is
 // no bad thing.
 function srPlan(){
-  const pool = srPool();
-  const learning = shuffle(pool.filter(it => !srKnown(it)).slice(0, SR_NEW)), review = shuffle(pool.filter(srKnown));
+  const pool = srPool(), todo = pool.filter(it => !srKnown(it));
+  // Half the new words are the next ones in teaching order, so a few get learnt steadily; the
+  // other half are picked from all the rest, so every word in the list can come up, not just
+  // the pictures used as wrong answers.
+  const learning = shuffle([...todo.slice(0, SR_FOCUS), ...shuffle(todo.slice(SR_FOCUS)).slice(0, SR_NEW - SR_FOCUS)]);
+  const review = shuffle(pool.filter(srKnown));
   const nNew = review.length ? Math.min(5, learning.length) : WORD_ROUND;
   const plan = [];
   for (let i = 0; i < WORD_ROUND; i++){
