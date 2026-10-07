@@ -1003,18 +1003,21 @@ $('#wordEndAgain').onclick = () => wordEndReplay && wordEndReplay();
 $('#wordEndBack').onclick = () => show('category');
 $('#wordPrize').onclick = () => usePrize(toMenu, () => show('wordEnd'));
 const toMenu = () => show('category');
+// Reading and writing rounds are WORD_ROUND long, Serbian rounds SR_ROUND
+const roundOf = kind => kind === 'serbian' ? SR_ROUND : WORD_ROUND;
 function wordRoundDone(kind, hits, replay){
-  const done = () => wordEnd(kind, hits, replay);
-  if (prizeEarned(hits, WORD_ROUND)){ S.prizes++; save(); prizeUnlocked(hits, WORD_ROUND, done); }
+  const done = () => wordEnd(kind, hits, replay), total = roundOf(kind);
+  if (prizeEarned(hits, total)){ S.prizes++; save(); prizeUnlocked(hits, total, done); }
   else done();
 }
 function wordEnd(kind, hits, replay){
   const [title, praise] = { reading: ['Well read!', 'Brilliant reading!'], writing: ['Well written!', 'Brilliant writing!'],
     serbian: ['Bravo!', 'Brilliant Serbian!'] }[kind];
   $('#wordEndTitle').textContent = title;
-  $('#wordEndScore').textContent = `${hits}/${WORD_ROUND}`;
-  $('#wordEndMsg').textContent = prizeEarned(hits, WORD_ROUND)
-    ? praise : `${hits} out of ${WORD_ROUND} right first time. Great effort!`;
+  const total = roundOf(kind);
+  $('#wordEndScore').textContent = `${hits}/${total}`;
+  $('#wordEndMsg').textContent = prizeEarned(hits, total)
+    ? praise : `${hits} out of ${total} right first time. Great effort!`;
   wordEndReplay = replay;
   show('wordEnd');
   whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
@@ -1759,6 +1762,7 @@ const SR_NUMS = ['jedan','dva','tri','četiri','pet','šest','sedam','osam','dev
   'jedanaest','dvanaest','trinaest','četrnaest','petnaest','šesnaest','sedamnaest','osamnaest','devetnaest','dvadeset']
   .map((lat, i) => ({ key: 'n' + (i + 1), n: i + 1, lat, cyr: toCyr(lat) }));
 const SR_LEARN = 2;      // first-time finds before a word moves on from "find it" to "say it"
+const SR_ROUND = 10;     // Serbian rounds are ten, like maths (reading and writing stay at WORD_ROUND)
 const SR_NEW = 6;        // how many un-learnt words a round works on at once
 const SR_FOCUS = 3;      // of those, how many are the next in teaching order (the rest are from anywhere)
 const SR_HARD = 12;      // once this many words are known, "find it" has four pictures, all from nearby in the list
@@ -1793,9 +1797,9 @@ function srPlan(){
   // the pictures used as wrong answers.
   const learning = shuffle([...todo.slice(0, SR_FOCUS), ...shuffle(todo.slice(SR_FOCUS)).slice(0, SR_NEW - SR_FOCUS)]);
   const review = shuffle(pool.filter(srKnown));
-  const nNew = review.length ? Math.min(5, learning.length) : WORD_ROUND;
+  const nNew = review.length ? Math.min(6, learning.length) : SR_ROUND;
   const plan = [];
-  for (let i = 0; i < WORD_ROUND; i++){
+  for (let i = 0; i < SR_ROUND; i++){
     const from = (i < nNew && learning.length) || !review.length ? learning : review;
     plan.push(from[i % from.length]);
   }
@@ -1804,8 +1808,8 @@ function srPlan(){
   return p;
 }
 function srSlots(){
-  $('#srSlots').innerHTML = Array.from({length:WORD_ROUND}, (_, i) => `<span class="slot${i < SB.count ? ' on' : ''}">${i < SB.count ? '⭐' : ''}</span>`).join('');
-  $('#srSlots').setAttribute('aria-label', `${SB.count} of ${WORD_ROUND} done`);
+  $('#srSlots').innerHTML = Array.from({length:SR_ROUND}, (_, i) => `<span class="slot${i < SB.count ? ' on' : ''}">${i < SB.count ? '⭐' : ''}</span>`).join('');
+  $('#srSlots').setAttribute('aria-label', `${SB.count} of ${SR_ROUND} done`);
 }
 function srStart(kind){
   if (S.locked) return;
@@ -1850,7 +1854,7 @@ function srGot(){
   }
   srSlots(); cheer();
   speak(pick(['Bravo!', 'Yes!', 'Well done!'])); srSpeak(SB.item);
-  if (SB.count >= WORD_ROUND){ setTimeout(() => wordRoundDone('serbian', SB.hits, () => srStart(SB.kind)), 900); return; }
+  if (SB.count >= SR_ROUND){ setTimeout(() => wordRoundDone('serbian', SB.hits, () => srStart(SB.kind)), 900); return; }
   setTimeout(srNext, 1100);
 }
 function srPick(b){
