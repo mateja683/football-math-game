@@ -71,11 +71,25 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
   display:flex;flex-direction:column;align-items:center;gap:10px;font-size:26px;font-weight:800}
 .catcard:active{transform:translateY(3px)}
 .caticon{font-size:64px;line-height:1}
-/* four subjects on the menu, two by two, so it still fits a phone without scrolling */
+/* four subjects on the menu, two by two, and the solar system in a short row under them */
 .catgrid.four{grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
-.catgrid.four .catcard{padding:20px 8px;font-size:21px;line-height:1.15;text-align:center;gap:8px}
-.catgrid.four .caticon{font-size:52px}
+.catgrid.four .catcard{padding:14px 8px;font-size:21px;line-height:1.15;text-align:center;gap:8px}
+.catgrid.four .caticon{font-size:46px}
 .catcard small{font-size:17px;font-weight:700;opacity:.8}
+
+/* the fifth card runs the full width, icon beside the words, so the menu only grows by a short row */
+.catgrid.four .catcard.wide{grid-column:1/-1;flex-direction:row;justify-content:center;padding:12px 8px;gap:14px}
+.catgrid.four .catcard.wide .caticon{font-size:44px}
+
+/* ---------- solar system ---------- */
+.spacetitle{flex:1;text-align:center;font-size:28px;font-weight:800;margin:0}
+/* the canvas is absolutely placed, not height:100%: a flex item has no definite height to take a percentage of */
+.spacebox{position:relative;flex:1;min-height:330px;margin-top:10px;border-radius:24px;overflow:hidden;background:#04061a;
+  border:3px solid rgba(255,255,255,.25)}
+#sc{position:absolute;inset:0;width:100%;height:100%;touch-action:manipulation;cursor:pointer}
+.factcard{background:var(--chalk);color:var(--ink);border-radius:22px;padding:10px 16px 12px;margin-top:10px;min-height:118px}
+.factcard b{display:block;font-size:26px;line-height:1.1}
+.factcard p{margin:4px 0 0;font-size:20px;line-height:1.3;font-weight:600}
 
 /* ---------- Serbian ---------- */
 .title.sr span{font-size:.62em;opacity:.85}
@@ -88,6 +102,8 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 .srnum{font-size:clamp(64px,20vw,100px);font-weight:800;line-height:1}
 #srPicks{margin:auto 0}   /* in the middle of the space under the word, not stuck to the bottom */
 #srPicks .ans.hit{background:var(--yellow)}
+#srPicks.four{grid-template-columns:1fr 1fr;max-width:300px;width:100%;margin-inline:auto;gap:14px}
+#srPicks.four .ans{font-size:clamp(56px,18vw,80px)}
 .srnote{font-size:18px;line-height:1.35;opacity:.85;margin:18px 0 0}
 
 /* ---------- reading / writing ---------- */
@@ -305,6 +321,8 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="catcard" id="goWriting"><span class="caticon">✏️</span><span>Writing games</span></button>
     <button class="catcard" id="goMath"><span class="caticon">🧮</span><span>Maths games</span></button>
     <button class="catcard" id="goSerbian"><span class="caticon">🇷🇸</span><span lang="sr">Srpski<br>Српски</span></button>
+
+    <button class="catcard wide" id="goSpace"><span class="caticon">🪐</span><span>Solar system</span></button>
   </div>
 
   <h2 class="label">Teams</h2>
@@ -467,6 +485,17 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="big" id="srRight">✓ Said it!</button>
     <button class="plain" id="srAgain">Try again</button>
   </div>
+</main>
+
+<!-- SOLAR SYSTEM -->
+<main class="app" id="space" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="spaceBack" aria-label="Back to the menu">←</button>
+    <h1 class="spacetitle">Solar system</h1>
+    <button class="iconbtn" id="spaceSay" aria-label="Hear it again" style="visibility:hidden">🔊</button>
+  </div>
+  <div class="spacebox" id="spaceBox"><canvas id="sc" aria-label="The solar system. Tap the Sun, the Moon or a planet."></canvas></div>
+  <div class="factcard" aria-live="polite"><b id="spaceName">Tap a planet!</b><p id="spaceText"></p></div>
 </main>
 
 <!-- READING / WRITING / SERBIAN ROUND COMPLETE -->
@@ -947,7 +976,7 @@ function ping(){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['category','teams','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet','srMenu','srPlay'].forEach(s => $('#' + s).hidden = s !== id);
+  ['category','teams','start','play','end','prize','gate','reading','writing','wordEnd','picker','cabinet','srMenu','srPlay','space'].forEach(s => $('#' + s).hidden = s !== id);
   $('#pong').hidden = id !== 'pong';
   $('#mini').hidden = id !== 'mini';
   $('#prizeEnd').hidden = S.prizes < 1;
@@ -1707,13 +1736,31 @@ const SR_WORDS = [
   ['autobus','🚌'], ['voz','🚆'], ['avion','✈️'], ['brod','🚢'], ['bicikl','🚲'],
   ['kapa','🧢'], ['majica','👕'], ['cipele','👟'],
   ['mesec','🌙'], ['zvezda','⭐'], ['cvet','🌸'], ['drvo','🌳'], ['kiša','🌧️'], ['sneg','❄️'],
-  ['ruka','✋'], ['noga','🦵'], ['oko','👁️'], ['uvo','👂'], ['nos','👃']
+  ['ruka','✋'], ['noga','🦵'], ['oko','👁️'], ['uvo','👂'], ['nos','👃'],
+  // harder: longer words, more of them in each group, so the pictures they're mixed up with
+  // (always from nearby in this list once SR_HARD words are known) are the same kind of thing
+  ['slon','🐘'], ['majmun','🐒'], ['tigar','🐯'], ['žirafa','🦒'], ['zebra','🦓'], ['krokodil','🐊'],
+  ['pingvin','🐧'], ['delfin','🐬'], ['kit','🐳'], ['ajkula','🦈'],
+  ['kamion','🚚'], ['traktor','🚜'], ['helikopter','🚁'], ['raketa','🚀'],
+  ['pica','🍕'], ['čokolada','🍫'], ['keks','🍪'], ['limun','🍋'], ['ananas','🍍'], ['lubenica','🍉'],
+  ['trešnja','🍒'], ['pomorandža','🍊'],
+  ['šešir','🎩'], ['čarape','🧦'], ['haljina','👗'], ['jakna','🧥'], ['naočare','👓'], ['rukavice','🧤'],
+  ['šal','🧣'], ['čizme','👢'],
+  ['duga','🌈'], ['oblak','☁️'], ['vatra','🔥'], ['planina','⛰️'], ['munja','⚡'], ['talas','🌊'],
+  ['zub','🦷'], ['srce','❤️'], ['jezik','👅'], ['usta','👄'], ['beba','👶'], ['baka','👵'], ['deda','👴'],
+  ['kornjača','🐢'], ['zmija','🐍'], ['veverica','🐿️'], ['jež','🦔'], ['sova','🦉'], ['vuk','🐺'], ['lisica','🦊'],
+  ['hobotnica','🐙'], ['rak','🦀'], ['kokoška','🐔'], ['kamila','🐪'], ['zmaj','🐉'],
+  ['leptir','🦋'], ['pčela','🐝'], ['bubamara','🐞'], ['puž','🐌'], ['pauk','🕷️'], ['mrav','🐜'],
+  ['šargarepa','🥕'], ['krompir','🥔'], ['paradajz','🍅'], ['kukuruz','🌽'], ['krastavac','🥒'], ['pečurka','🍄'], ['med','🍯'],
+  ['olovka','✏️'], ['makaze','✂️'], ['kišobran','☂️'], ['balon','🎈'], ['poklon','🎁'], ['sijalica','💡'],
+  ['ogledalo','🪞'], ['vrata','🚪'], ['prozor','🪟'], ['pehar','🏆'], ['telefon','📱']
 ].map(([lat, e]) => ({ key: lat, lat, cyr: toCyr(lat), e }));
 const SR_NUMS = ['jedan','dva','tri','četiri','pet','šest','sedam','osam','devet','deset',
   'jedanaest','dvanaest','trinaest','četrnaest','petnaest','šesnaest','sedamnaest','osamnaest','devetnaest','dvadeset']
   .map((lat, i) => ({ key: 'n' + (i + 1), n: i + 1, lat, cyr: toCyr(lat) }));
 const SR_LEARN = 2;      // first-time finds before a word moves on from "find it" to "say it"
 const SR_NEW = 6;        // how many un-learnt words a round works on at once
+const SR_HARD = 12;      // once this many words are known, "find it" has four pictures, all from nearby in the list
 const SB = { kind: 'words', plan: [], count: 0, hits: 0, missed: false, item: null, mode: 'find', busy: false };
 
 const srVoice = () => voices.find(v => /^sr([-_]|$)/i.test(v.lang || '')) || null;
@@ -1772,7 +1819,12 @@ function srNext(){
   $('#srJudge').hidden = find; $('#srPicks').hidden = !find; $('#srStage').hidden = find;
   if (find){
     $('#srStage').innerHTML = '';
-    const opts = [it, ...shuffle(srPool().filter(o => o !== it)).slice(0, 2)];
+    // Harder once a dozen words are known: four pictures, and the other three come from near it in the
+    // list, so a farm animal sits with farm animals and can't be told apart just by being the odd one out.
+    const pool = srPool(), hard = words && pool.filter(srKnown).length >= SR_HARD, at = pool.indexOf(it);
+    const near = hard ? pool.filter((o, i) => o !== it && Math.abs(i - at) <= 6) : pool.filter(o => o !== it);
+    const opts = [it, ...shuffle(near).slice(0, hard ? 3 : 2)];
+    $('#srPicks').classList.toggle('four', opts.length === 4);
     const order = words ? shuffle(opts) : opts.sort((a, b) => a.n - b.n);   // numbers in order, like the maths buttons
     $('#srPicks').innerHTML = order.map(o => `<button class="ans" data-k="${o.key}" aria-label="${o.lat}">${words ? o.e : o.n}</button>`).join('');
     $$('#srPicks .ans').forEach(b => b.onclick = () => srPick(b));
@@ -2956,39 +3008,431 @@ const Pairs = {
   }
 };
 
+/* ---------- the solar system: shared by the space explorer and the rocket game ---------- */
+// Each body has several facts, so tapping the same planet again says something new. Checked,
+// not written from memory: Saturn's moon count (274 confirmed, March 2025) is why it says "more
+// than any other planet" rather than a number that will go stale; the Great Red Spot is now
+// about one Earth across and shrinking; Uranus, not Neptune, holds the coldest reading; still
+// only twelve people have walked on the Moon, and Artemis II flew round it in April 2026.
+// Neptune's true colour is a paler blue than the old photos, so it isn't called "deep blue".
+const SOLAR = {
+  sun: {name:'The Sun', size:0, facts:[
+    "The Sun is a star! It's the closest star to Earth.",
+    'The Sun is so big that more than a million Earths could fit inside it.',
+    'The Sun is a giant ball of very, very hot gas.',
+    "Light from the Sun takes about eight minutes to reach us. That's very fast for such a long way!",
+    'All the planets go round and round the Sun.',
+    'Plants need sunlight to grow, so the Sun helps make our food.',
+    'Never look straight at the Sun, not even with sunglasses on. It can hurt your eyes.'
+  ]},
+  mercury: {name:'Mercury', size:.5, facts:[
+    'Mercury is the smallest planet.',
+    'Mercury is the closest planet to the Sun.',
+    'Mercury goes round the Sun faster than any other planet. A year on Mercury is only 88 days!',
+    'Mercury is covered in craters, a bit like our Moon.',
+    'Mercury has no moons at all.',
+    "Mercury is boiling hot in the day and freezing cold at night, because it has hardly any air to keep the heat in."
+  ]},
+  venus: {name:'Venus', size:.78, facts:[
+    'Venus is the hottest planet, even hotter than Mercury, because its thick clouds trap the heat.',
+    'Venus is the brightest planet in our night sky. Look for it just after sunset, or before sunrise.',
+    'Venus spins the other way round to Earth, so on Venus the Sun comes up in the west.',
+    'A day on Venus is longer than a whole year on Venus!',
+    'Venus is nearly the same size as Earth.',
+    'Venus has no moons.'
+  ]},
+  earth: {name:'Earth', size:.8, facts:[
+    "Earth is our home! It's the only planet we know of with living things on it.",
+    'Most of the Earth is covered in water, in the seas and oceans.',
+    'Earth spins round once every day. That spinning is what makes day and night.',
+    'It takes Earth a whole year to go all the way round the Sun.',
+    'Earth has one moon, called the Moon.',
+    "Earth's air keeps us warm, and gives us the oxygen we breathe."
+  ]},
+  moon: {name:'The Moon', size:.3, facts:[
+    'The Moon goes round and round the Earth.',
+    "The Moon doesn't make its own light. It shines because sunlight bounces off it.",
+    'Twelve astronauts have walked on the Moon. The first one was Neil Armstrong.',
+    "There's no wind on the Moon, so the astronauts' footprints are still there.",
+    'On the Moon you could jump much higher than on Earth, because the Moon pulls on you less.',
+    'The dark patches on the Moon are old lava, from volcanoes long, long ago.',
+    'In 2026, four astronauts flew all the way round the Moon and back, on a rocket called Artemis Two.'
+  ]},
+  mars: {name:'Mars', size:.6, facts:[
+    "Mars is the red planet. It's red because its dust is rusty.",
+    'Mars has the biggest volcano of all the planets. It is much, much taller than Mount Everest.',
+    'Mars has two little moons, called Phobos and Deimos.',
+    'Robots called rovers drive around on Mars, taking pictures and looking at the rocks.',
+    'Mars has ice at its top and bottom, just like Earth does.',
+    'A day on Mars is only a little bit longer than a day on Earth.',
+    'Mars has giant dust storms that can cover the whole planet.'
+  ]},
+  jupiter: {name:'Jupiter', size:1.5, facts:[
+    'Jupiter is the biggest planet of all.',
+    'More than a thousand Earths could fit inside Jupiter.',
+    "Jupiter's red spot is a giant storm, about as big as the whole Earth. It has been blowing for hundreds of years.",
+    "Jupiter is made of gas, so there's no ground to stand on.",
+    "Jupiter's biggest moon, Ganymede, is even bigger than the planet Mercury.",
+    'Jupiter spins faster than any other planet. A day there is less than ten hours long.'
+  ]},
+  saturn: {name:'Saturn', size:1.2, facts:[
+    'Saturn has beautiful rings, made of lots and lots of bits of ice and rock.',
+    'Saturn has more moons than any other planet. Hundreds of them!',
+    "Saturn is so light for its size that it would float, if you could find a bath big enough.",
+    "Saturn's biggest moon, Titan, has lakes, but they're not water. They're a very cold liquid called methane.",
+    'Saturn is the second biggest planet, after Jupiter.',
+    "Saturn's rings are very, very wide, but very thin."
+  ]},
+  uranus: {name:'Uranus', size:1.1, facts:[
+    'Uranus spins on its side, like a ball rolling round the Sun.',
+    'Uranus is the coldest planet of all, even colder than Neptune.',
+    'A year on Uranus is 84 Earth years. You would be very old before your first birthday!',
+    'Uranus was the first planet ever found with a telescope.',
+    'Uranus has thin, dark rings, standing up on their end.',
+    "Uranus looks blue-green because of a gas called methane in its air."
+  ]},
+  neptune: {name:'Neptune', size:1.05, facts:[
+    'Neptune is the planet furthest from the Sun.',
+    'Neptune has the strongest winds of any planet, much faster than any storm on Earth.',
+    'Neptune was found by doing maths! Scientists worked out where it must be, before anyone saw it.',
+    'A year on Neptune is about 165 Earth years.',
+    'Only one spaceship has ever visited Neptune. It was called Voyager Two.',
+    "Neptune's biggest moon, Triton, goes round the wrong way."
+  ]}
+};
+// A little repeatable random, so a planet's craters and clouds are the same every frame.
+const seeded = s => () => (s = (s * 16807) % 2147483647) / 2147483647;
+// A smooth blob through the points [x, y] (in units of R, round (x0, y0)).
+function blob(g, x0, y0, R, pts){
+  g.beginPath();
+  const m = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], n = pts.length;
+  const s = m(pts[n - 1], pts[0]); g.moveTo(x0 + s[0] * R, y0 + s[1] * R);
+  pts.forEach((p, i) => { const q = m(p, pts[(i + 1) % n]); g.quadraticCurveTo(x0 + p[0] * R, y0 + p[1] * R, x0 + q[0] * R, y0 + q[1] * R); });
+  g.closePath();
+}
+// Draws a body of the solar system at (x, y), radius R. `light` is the direction the sunlight
+// comes from (radians), so in the explorer every planet is lit from the Sun's side.
+// Saturn's rings and Uranus's reach well outside R; the Sun's glow does too.
+function drawBody(g, key, x, y, R, light = -2.36){
+  if (R < .5) return;
+  const rnd = seeded([...key].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483646 + 1);
+  if (key === 'sun'){
+    const glow = g.createRadialGradient(x, y, R * .85, x, y, R * 1.7);
+    glow.addColorStop(0, 'rgba(255,200,60,.55)'); glow.addColorStop(.4, 'rgba(255,150,30,.18)'); glow.addColorStop(1, 'rgba(255,120,0,0)');
+    g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 1.7, 0, Math.PI * 2); g.fill();
+    const body = g.createRadialGradient(x, y, 0, x, y, R);    // brightest in the middle, darker at the edge
+    body.addColorStop(0, '#fffbe3'); body.addColorStop(.55, '#ffd84a'); body.addColorStop(.88, '#ffa21f'); body.addColorStop(1, '#f07000');
+    g.fillStyle = body; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.fill();
+    g.save(); g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.clip();
+    for (let i = 0; i < 260; i++){                              // a fine, boiling surface
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * R;
+      g.fillStyle = rnd() < .5 ? 'rgba(255,250,210,.13)' : 'rgba(210,100,0,.1)';
+      g.beginPath(); g.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, R * (.012 + rnd() * .025), 0, Math.PI * 2); g.fill();
+    }
+    [[.32, .18, .07], [.4, .26, .045], [-.25, -.35, .05]].forEach(([a, b, r]) => {   // sunspots
+      g.fillStyle = 'rgba(160,60,0,.45)'; g.beginPath(); g.arc(x + a * R, y + b * R, r * R * 1.6, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(90,30,0,.7)'; g.beginPath(); g.arc(x + a * R, y + b * R, r * R, 0, Math.PI * 2); g.fill();
+    });
+    g.restore();
+    return;
+  }
+  const tilt = -.38;
+  // Saturn's rings, in bands with the Cassini gap; `front` draws the half in front of the planet
+  const rings = front => {
+    g.save(); g.translate(x, y); g.rotate(tilt);
+    g.beginPath(); g.rect(-R * 3, front ? 0 : -R * 3, R * 6, R * 3); g.clip();
+    [[1.24, 1.5, 'rgba(150,130,100,.35)'], [1.5, 1.92, 'rgba(226,208,166,.95)'], [1.92, 1.99, 'rgba(0,0,0,0)'],
+     [1.99, 2.22, 'rgba(205,184,140,.85)'], [2.27, 2.31, 'rgba(200,180,140,.5)']].forEach(([a, b, c]) => {
+      g.beginPath(); g.ellipse(0, 0, R * b, R * b * .36, 0, 0, Math.PI * 2); g.ellipse(0, 0, R * a, R * a * .36, 0, 0, Math.PI * 2);
+      g.fillStyle = c; g.fill('evenodd');
+    });
+    g.restore();
+  };
+  if (key === 'saturn') rings(false);
+  if (key === 'uranus'){                                        // faint rings, standing on end
+    g.save(); g.translate(x, y); g.rotate(.12); g.strokeStyle = 'rgba(210,240,250,.4)';
+    [[1.5, 1.6], [1.75, 1.2]].forEach(([r, w]) => { g.lineWidth = w; g.beginPath(); g.ellipse(0, 0, R * r * .2, R * r, 0, 0, Math.PI * 2); g.stroke(); });
+    g.restore();
+  }
+  if (key === 'earth' || key === 'venus' || key === 'neptune' || key === 'uranus'){    // a thin glow of air
+    const air = g.createRadialGradient(x, y, R * .95, x, y, R * 1.12);
+    air.addColorStop(0, key === 'earth' ? 'rgba(120,180,255,.5)' : key === 'venus' ? 'rgba(255,240,200,.35)' : 'rgba(170,220,255,.3)');
+    air.addColorStop(1, 'rgba(120,180,255,0)');
+    g.fillStyle = air; g.beginPath(); g.arc(x, y, R * 1.12, 0, Math.PI * 2); g.fill();
+  }
+  g.save(); g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.clip();
+  const fill = c => { g.fillStyle = c; g.fillRect(x - R, y - R, R * 2, R * 2); };
+  const craters = (n, dark, lite, big) => {
+    for (let i = 0; i < n; i++){
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * R * .95, r = R * (.03 + rnd() * big);
+      const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
+      g.fillStyle = lite; g.beginPath(); g.arc(cx + r * .18, cy + r * .18, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = dark; g.beginPath(); g.arc(cx, cy, r * .9, 0, Math.PI * 2); g.fill();
+    }
+  };
+  // wavy bands across the planet, for the gas giants
+  const bands = (cols, wob) => {
+    const n = cols.length, h = R * 2 / n;
+    cols.forEach((c, i) => {
+      const y0 = y - R + i * h, ph = rnd() * 6;
+      g.beginPath(); g.moveTo(x - R, y0 + h * 1.2);
+      for (let k = 0; k <= 16; k++) g.lineTo(x - R + k * R / 8, y0 + Math.sin(ph + k * .9) * h * wob);
+      g.lineTo(x + R, y0 + h * 1.2); g.closePath(); g.fillStyle = c; g.fill();
+    });
+  };
+  if (key === 'mercury'){
+    fill('#9a948c'); craters(26, 'rgba(70,64,58,.45)', 'rgba(220,214,204,.35)', .12);
+  } else if (key === 'venus'){
+    fill('#e6cf98');
+    for (let i = 0; i < 7; i++){                                 // creamy swirls of cloud
+      g.strokeStyle = i % 2 ? 'rgba(255,246,220,.3)' : 'rgba(200,160,90,.2)'; g.lineWidth = R * (.1 + rnd() * .14);
+      const yy = y - R * .8 + i * R * .27;
+      g.beginPath(); g.moveTo(x - R, yy); g.bezierCurveTo(x - R * .3, yy - R * .35 * rnd(), x + R * .3, yy + R * .3 * rnd(), x + R, yy - R * .1); g.stroke();
+    }
+  } else if (key === 'earth'){
+    fill('#1d5fb0');
+    g.fillStyle = '#3f8a3a';
+    const land = [
+      [[-.08,-.12],[.14,-.2],[.36,-.1],[.44,.06],[.36,.24],[.24,.48],[.12,.66],[.03,.56],[0,.34],[-.12,.16],[-.24,.05],[-.24,-.08]],   // Africa
+      [[-.2,-.34],[0,-.48],[.24,-.56],[.46,-.46],[.42,-.3],[.2,-.26],[.04,-.24],[-.12,-.24]],                                       // Europe
+      [[.46,-.16],[.62,-.12],[.58,.06],[.48,.04]],                                                                                // Arabia
+      [[-.86,-.02],[-.6,.04],[-.52,.26],[-.62,.52],[-.74,.62],[-.82,.34]]                                                          // South America
+    ];
+    land.forEach(p => { blob(g, x, y, R, p); g.fill(); });
+    g.fillStyle = 'rgba(196,164,96,.75)';                        // the Sahara
+    blob(g, x, y, R, [[-.12,-.06],[.14,-.14],[.34,-.06],[.3,.08],[.02,.06]]); g.fill();
+    g.fillStyle = '#f4f8ff';
+    g.beginPath(); g.ellipse(x, y - R * .98, R * .7, R * .16, 0, 0, Math.PI * 2); g.fill();       // ice at the poles
+    g.beginPath(); g.ellipse(x, y + R * .98, R * .8, R * .18, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineCap = 'round';
+    for (let i = 0; i < 9; i++){                                 // wisps of cloud
+      const cx = x + (rnd() - .5) * R * 1.7, cy = y + (rnd() - .5) * R * 1.6, l = R * (.15 + rnd() * .3);
+      g.lineWidth = R * (.04 + rnd() * .05);
+      g.beginPath(); g.moveTo(cx - l, cy); g.quadraticCurveTo(cx, cy - l * .35, cx + l, cy + l * .1); g.stroke();
+    }
+  } else if (key === 'moon'){
+    fill('#bdbab4');
+    g.fillStyle = 'rgba(96,94,92,.55)';
+    [[[-.4,-.4],[-.05,-.5],[.05,-.2],[-.2,-.05],[-.5,-.15]], [[.05,-.1],[.4,-.2],[.5,.1],[.2,.2]], [[-.4,.15],[-.1,.25],[-.15,.5],[-.45,.4]]]
+      .forEach(p => { blob(g, x, y, R, p); g.fill(); });
+    craters(12, 'rgba(110,108,104,.4)', 'rgba(240,238,232,.35)', .09);
+  } else if (key === 'mars'){
+    fill('#c45a2c');
+    g.fillStyle = 'rgba(120,46,20,.55)';
+    [[[-.5,-.1],[-.1,-.2],[.2,-.05],[.1,.15],[-.3,.2]], [[.2,.3],[.55,.25],[.6,.45],[.3,.5]], [[-.6,.45],[-.3,.4],[-.35,.6]]]
+      .forEach(p => { blob(g, x, y, R, p); g.fill(); });
+    g.fillStyle = 'rgba(232,150,100,.35)'; blob(g, x, y, R, [[-.3,-.55],[.2,-.6],[.4,-.4],[-.1,-.35]]); g.fill();
+    g.strokeStyle = 'rgba(90,30,10,.5)'; g.lineWidth = R * .05;   // a great canyon
+    g.beginPath(); g.moveTo(x - R * .5, y + R * .02); g.quadraticCurveTo(x - R * .1, y - R * .08, x + R * .35, y + R * .05); g.stroke();
+    g.fillStyle = '#fbfbff'; g.beginPath(); g.ellipse(x, y - R * .95, R * .42, R * .16, 0, 0, Math.PI * 2); g.fill();
+  } else if (key === 'jupiter'){
+    bands(['#e9dcc4', '#c49a72', '#efe3cb', '#a8724e', '#ead7b6', '#d8b48c', '#b37c55', '#efe1c6', '#c8a17a', '#e6d4b4'], .14);
+    g.fillStyle = '#e9c9a6'; g.beginPath(); g.ellipse(x + R * .28, y + R * .36, R * .3, R * .17, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#c0573b'; g.beginPath(); g.ellipse(x + R * .28, y + R * .36, R * .22, R * .12, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.5)'; [[-.4, .1], [.1, -.3], [-.2, .55]].forEach(([a, b]) => { g.beginPath(); g.ellipse(x + a * R, y + b * R, R * .07, R * .035, 0, 0, Math.PI * 2); g.fill(); });
+  } else if (key === 'saturn'){
+    bands(['#e9d7a6', '#dcc28a', '#efe2bb', '#d6b97c', '#e8d39f', '#cdb07a', '#e3cf9d'], .06);
+  } else if (key === 'uranus'){
+    fill('#a9dde3');
+    g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(x - R, y - R * .25, R * 2, R * .3);
+  } else if (key === 'neptune'){
+    bands(['#5d8de0', '#4f7fd6', '#6595e2', '#4a78cf', '#5a89dc', '#4572c9'], .05);
+    g.fillStyle = 'rgba(25,45,120,.6)'; g.beginPath(); g.ellipse(x - R * .2, y + R * .2, R * .22, R * .12, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.75)';
+    [[-.05, .06, .14], [.25, -.35, .25], [-.3, -.5, .14]].forEach(([a, b, w]) => { g.beginPath(); g.ellipse(x + a * R, y + b * R, w * R, R * .035, 0, 0, Math.PI * 2); g.fill(); });
+  }
+  // sunlit on one side, night on the other
+  const lx = x + Math.cos(light) * R * .55, ly = y + Math.sin(light) * R * .55;
+  const shade = g.createRadialGradient(lx, ly, R * .05, lx, ly, R * 1.75);
+  shade.addColorStop(0, 'rgba(255,255,255,.2)'); shade.addColorStop(.4, 'rgba(0,0,0,0)');
+  shade.addColorStop(.75, 'rgba(0,0,12,.6)'); shade.addColorStop(1, 'rgba(0,0,12,.9)');
+  g.fillStyle = shade; g.fillRect(x - R, y - R, R * 2, R * 2);
+  if (key === 'saturn'){                                        // the rings' shadow across the planet
+    g.save(); g.translate(x, y); g.rotate(tilt); g.strokeStyle = 'rgba(40,30,10,.35)'; g.lineWidth = R * .1;
+    g.beginPath(); g.ellipse(0, R * .1, R * 1.3, R * .45, 0, 0, Math.PI); g.stroke(); g.restore();
+  }
+  g.restore();
+  if (key === 'saturn') rings(true);
+}
+// One fact at a time, and every fact once before any comes round again.
+const factBags = {};
+function nextFact(key){
+  let bag = factBags[key];
+  if (!bag || !bag.length){
+    const last = bag && bag.last;
+    bag = shuffle(SOLAR[key].facts);
+    if (bag.length > 1 && bag[bag.length - 1] === last) bag.unshift(bag.pop());   // never the same twice running
+    factBags[key] = bag;
+  }
+  const f = bag.pop(); bag.last = f;
+  return f;
+}
+
+/* ---------- space explorer ---------- */
+// The solar system on one screen: tap the Sun, a planet or the Moon to hear one fact about it.
+// Sizes are in the right order but not to scale, and the orbits are squeezed together - at
+// true scale the planets would be specks and the screen would be miles wide. The Sun sits off
+// one edge (top on a phone, left on a wide screen) and the planets lie on their orbits, lit
+// from the Sun's side, with the asteroid belt between Mars and Jupiter.
+const SPACE_ORDER = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+const SPACE_SIDE = { mercury: .15, venus: -.55, earth: .45, mars: -.35, jupiter: .45, saturn: -.42, uranus: .5, neptune: -.35 };
+const SP = { cv: $('#sc'), spots: [], sel: null, fact: '', W: 0, H: 0, field: [] };
+SP.g = SP.cv.getContext('2d');
+SP.field = Array.from({length: 160}, () => ({ x: Math.random(), y: Math.random(), r: Math.random() }));
+function spaceOpen(){
+  if (S.locked) return;
+  SP.sel = null; SP.fact = '';
+  $('#spaceName').textContent = 'Tap a planet!';
+  $('#spaceText').textContent = 'Touch the Sun, the Moon or any planet to find out about it.';
+  $('#spaceSay').style.visibility = 'hidden';
+  show('space');
+  spaceDraw();
+  speak('The solar system! Touch the Sun, the Moon or a planet to find out about it.');
+}
+function spaceLayout(){
+  const W = SP.W, H = SP.H, wide = W > H * 1.15;
+  // along: distance from the Sun's side; across: position along the other axis
+  const len = wide ? W : H, span = wide ? H : W;
+  const sunR = Math.min(span * .55, len * .3), sunC = -sunR * .45;
+  const unit = Math.min(span * .085, len * .05);
+  const first = sunC + sunR + unit * 1.3, last = len - unit * 1.9;
+  const spots = [{ key: 'sun', d: sunC, a: 0, R: sunR }];
+  // the gap between two orbits grows with the size of the planets either side, so the giants
+  // get the room they need and the small rocky ones sit closer in, as they really do
+  const R = SPACE_ORDER.map(k => unit * SOLAR[k].size);
+  const gaps = R.slice(1).map((r, i) => r + R[i] + unit * (SPACE_ORDER[i] === 'mars' ? 2.6 : .9)), k = (last - first) / gaps.reduce((a, b) => a + b, 0);
+  let d = first;
+  SPACE_ORDER.forEach((key, i) => {
+    if (i) d += gaps[i - 1] * k;
+    spots.push({ key, d, a: SPACE_SIDE[key], R: R[i] });
+  });
+  // the orbits are circles round the Sun, so a planet off to the side sits a little nearer it
+  spots.forEach(s => {
+    const across = span / 2 + s.a * span * .36, off = across - span / 2;
+    const dd = s.key === 'sun' ? s.d : sunC + Math.sqrt(Math.max(0, Math.pow(s.d - sunC, 2) - off * off));
+    s.x = wide ? dd : across; s.y = wide ? across : dd;
+    s.orbit = s.d - sunC;
+  });
+  const sun = spots[0], earth = spots.find(s => s.key === 'earth');
+  const mo = { key: 'moon', R: Math.max(4, unit * SOLAR.moon.size), x: earth.x + earth.R * 1.9 * (wide ? .4 : 1), y: earth.y - earth.R * 1.5 * (wide ? 1 : .55) };
+  spots.push(mo);
+  SP.spots = spots; SP.sun = { x: wide ? sunC : span / 2, y: wide ? span / 2 : sunC, R: sunR };
+  const mars = spots.find(s => s.key === 'mars'), jup = spots.find(s => s.key === 'jupiter');
+  SP.belt = (mars.orbit + mars.R + jup.orbit - jup.R) / 2; SP.beltW = Math.max(4, (jup.orbit - jup.R - mars.orbit - mars.R) * .22);
+}
+function spaceDraw(){
+  const cv = SP.cv, box = cv.parentNode.getBoundingClientRect();
+  if (!box.width || $('#space').hidden) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (cv.width !== Math.round(box.width * dpr) || cv.height !== Math.round(box.height * dpr)){
+    cv.width = Math.round(box.width * dpr); cv.height = Math.round(box.height * dpr);
+  }
+  SP.W = box.width; SP.H = box.height;
+  const g = SP.g, W = SP.W, H = SP.H;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  spaceLayout();
+  g.fillStyle = '#04061a'; g.fillRect(0, 0, W, H);
+  [[.8, .75, '#1e1450'], [.2, .9, '#0c2448']].forEach(([fx, fy, c]) => {
+    const gr = g.createRadialGradient(W * fx, H * fy, 0, W * fx, H * fy, Math.max(W, H) * .6);
+    gr.addColorStop(0, c); gr.addColorStop(1, 'rgba(4,6,26,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  });
+  SP.field.forEach(f => { g.globalAlpha = .3 + f.r * .7; g.fillStyle = '#fff'; g.fillRect(f.x * W, f.y * H, f.r * 1.8 + .4, f.r * 1.8 + .4); });
+  g.globalAlpha = 1;
+  const sun = SP.sun;
+  g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = 1;            // orbits
+  SP.spots.forEach(s => { if (s.orbit){ g.beginPath(); g.arc(sun.x, sun.y, s.orbit, 0, Math.PI * 2); g.stroke(); } });
+  const rnd = seeded(99);                                               // the asteroid belt
+  for (let i = 0; i < 420; i++){
+    const a = rnd() * Math.PI * 2, d = SP.belt + (rnd() + rnd() - 1) * SP.beltW;
+    g.fillStyle = rnd() < .5 ? 'rgba(205,185,160,.85)' : 'rgba(150,132,115,.85)';
+    g.beginPath(); g.arc(sun.x + Math.cos(a) * d, sun.y + Math.sin(a) * d, .8 + rnd() * 1.4, 0, Math.PI * 2); g.fill();
+  }
+  SP.spots.forEach(s => {
+    const light = Math.atan2(sun.y - s.y, sun.x - s.x);
+    drawBody(g, s.key, s.x, s.y, s.R, light);
+  });
+  const sel = SP.spots.find(s => s.key === SP.sel);
+  if (sel && sel.key !== 'sun'){                                        // a ring round the one being talked about
+    const r = sel.R * (sel.key === 'saturn' ? 2.45 : 1.35) + 6;
+    g.strokeStyle = '#f5c400'; g.lineWidth = 3; g.setLineDash([7, 6]);
+    g.beginPath(); g.arc(sel.x, sel.y, r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  }
+  // names, small, under each planet
+  g.font = `700 ${Math.max(12, Math.min(15, W * .036))}px "Baloo 2","Trebuchet MS",sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  SP.spots.forEach(s => {
+    if (s.key === 'sun' || s.key === 'moon') return;
+    const ly = s.y + s.R * (s.key === 'saturn' ? 1.05 : 1) + 4;
+    g.lineWidth = 3; g.strokeStyle = 'rgba(4,6,26,.85)'; g.strokeText(SOLAR[s.key].name, s.x, ly);
+    g.fillStyle = s.key === SP.sel ? '#f5c400' : 'rgba(255,255,255,.85)'; g.fillText(SOLAR[s.key].name, s.x, ly);
+  });
+}
+// The nearest body to the tap, with generous room round the small ones for a small finger.
+function spaceHit(x, y){
+  let best = null, bd = Infinity;
+  SP.spots.forEach(s => {
+    const d = Math.hypot(x - s.x, y - s.y), reach = Math.max(s.R * (s.key === 'saturn' ? 2 : 1.15), 30);
+    if (d < reach && d - s.R < bd){ bd = d - s.R; best = s; }
+  });
+  return best;
+}
+function spaceTell(key){
+  const f = nextFact(key), name = SOLAR[key].name;
+  SP.sel = key; SP.fact = f;
+  $('#spaceName').textContent = name;
+  $('#spaceText').textContent = f;
+  $('#spaceSay').style.visibility = 'visible';   // kept in the layout, so the title stays centred
+  spaceDraw();
+  speak(`${name}. ${f}`);
+}
+SP.cv.addEventListener('pointerdown', e => {
+  const b = SP.cv.getBoundingClientRect(), s = spaceHit(e.clientX - b.left, e.clientY - b.top);
+  if (s) spaceTell(s.key);
+});
+$('#spaceSay').onclick = () => { if (SP.sel) speak(`${SOLAR[SP.sel].name}. ${SP.fact}`); };
+$('#spaceBack').onclick = () => { hush(); show('category'); };
+$('#goSpace').onclick = () => spaceOpen();
+if ('ResizeObserver' in window) new ResizeObserver(() => spaceDraw()).observe($('#spaceBox'));
+addEventListener('resize', () => spaceDraw());
+
 /* ---------- prize game: rocket trip ---------- */
-// The solar system from the outside in. Walk the astronaut to the rocket, press the three
-// buttons, count down, blast off - then zoom out to Neptune and fly in, planet by planet, to
-// the Sun, and home again to land on Earth. Every stop says one fact, out loud.
-// Between stops the rocket dodges space rocks in three lanes. A rock is a bump, never a crash:
-// the shields hold, one star falls out of the hold, and the trip carries on. Nothing here can
-// end the mission early, and every pattern of rocks leaves at least one lane clear.
-// Planet sizes are in the right order (Jupiter, Saturn, Uranus, Neptune, Earth, Venus, Mars,
-// Mercury) but nowhere near the right scale - at true scale Mercury would be a speck.
+// Walk the astronaut to the rocket, press the three buttons, count down, blast off - then
+// warp out to Neptune and race back in past every planet to the Sun, and home to land on Earth.
+// The planets are checkpoints, flown straight past rather than stopped at (the facts live in
+// the Solar system screen now). This is the harder game: two lives to start with, up to MAX_LIVES.
+// Every hit costs one. Lose the last one and that stretch is flown again from the last planet,
+// with the lives topped back up and the rocket a little slower each try (`tries`), so a
+// four-year-old can always get through in the end and the mission can never be lost outright.
+// Each checkpoint makes the rocket faster and brings in something new (`adds`): space dust (an
+// extra life), aliens, bubbles (a few seconds where nothing can hurt you), comets (the lane
+// flashes first), wide old satellites and, near the Sun, fireballs.
+// `spawn()` checks every new hazard against the ones already falling (`fits()`), so at every
+// moment at least one of the three lanes is clear when it reaches the rocket.
 const STOPS = [
-  {key:'neptune', name:'Neptune', size:1.05, c:['#9bbcff','#3a5fd6','#14286e'],
-   fact:"Neptune is the planet furthest from the Sun. It's very cold, and it has the strongest winds of all."},
-  {key:'uranus', name:'Uranus', size:1.1, c:['#e6feff','#8fdde6','#3f8f9f'],
-   fact:'Uranus is an icy planet that spins on its side, like a ball rolling round the Sun.'},
-  {key:'saturn', name:'Saturn', size:1.2, c:['#fff3d1','#e3c27e','#93703a'],
-   fact:'Saturn has beautiful rings, made of lots and lots of bits of ice and rock.'},
-  {key:'jupiter', name:'Jupiter', size:1.5, c:['#fdebd4','#d6a372','#7d5030'],
-   fact:'Jupiter is the biggest planet of all. Its red spot is a giant storm, about as big as the whole Earth.'},
-  {key:'mars', name:'Mars', size:.6, c:['#ffb592','#cf532b','#6e220e'], belt:true,
-   fact:"Mars is the red planet. It's red because its dust is rusty."},
-  {key:'earth', name:'Earth', size:.8, c:['#a8dcff','#2f7fd6','#103a78'],
-   fact:"That's Earth, our home! It's the only planet we know of with living things on it. We'll come back at the end."},
-  {key:'venus', name:'Venus', size:.78, c:['#fff7da','#e8cd8a','#9c7f3a'],
-   fact:'Venus is the hottest planet, even hotter than Mercury, because its thick clouds trap the heat.'},
-  {key:'mercury', name:'Mercury', size:.5, c:['#efefef','#a9a9a9','#555555'],
-   fact:'Mercury is the smallest planet, and the closest one to the Sun.'},
-  {key:'sun', name:'The Sun', size:0, sun:true, c:['#fff8c4','#ffc21a','#f07a00'],
-   fact:"The Sun is a star! It's so big that more than a million Earths could fit inside it. It's much too hot to land on, so let's turn round and fly home!"}
+  {key:'neptune', dot:'#5d8de0', adds:'dust', say:'Catch the purple space dust for an extra life!'},
+  {key:'uranus',  dot:'#a9dde3', adds:'ufo', say:'Aliens! Fly round the flying saucers!'},
+  {key:'saturn',  dot:'#e3cf9d', adds:'bubble', say:'Catch a bubble, and nothing can hurt you for a little while!'},
+  {key:'jupiter', dot:'#d8b48c', say:'Next is the asteroid belt. Lots of space rocks!'},
+  {key:'mars',    dot:'#c45a2c', belt:true, adds:'comet', say:'Comets! When a lane flashes, move out of the way!'},
+  {key:'earth',   dot:'#2f7fd6', adds:'junk', say:'Old satellites! They are very wide, so find the gap!'},
+  {key:'venus',   dot:'#e6cf98', adds:'fire', say:"We're getting near the Sun. Watch out for fireballs!"},
+  {key:'mercury', dot:'#a9a49c', say:'Next stop, the Sun! Hold on tight!'},
+  {key:'sun',     dot:'#ffc21a', sun:true, say:"Too hot! Turn round, and race home to Earth!"}
 ];
+// What can fall, and how: `fall` is its speed against the rocket's, `w` how many lanes it
+// covers, `warn` how long its lane flashes before it comes.
+const HAZ = {
+  rock:  { fall: 1.15, w: 1 },
+  ufo:   { fall: .75,  w: 2 },        // sways between its two lanes, so it blocks both
+  comet: { fall: 2.1,  w: 1, warn: 1.1 },
+  fire:  { fall: 1.9,  w: 1, warn: 1 },
+  junk:  { fall: 1,    w: 2 }
+};
 const Rocket = {
   title: 'Rocket trip', intro: 'Walk the astronaut to the rocket — touch where to go!',
   sky: true,                 // paints its own background, so Mini skips the pitch
-  LEG: 7,                    // seconds of rock-dodging between stops
+  LEG: 8,                    // seconds of dodging between checkpoints
+  LIVES: 2, MAX_LIVES: 4,
   BTN: [
     {col:'red',    fill:'#e63946', ico:'⛽', job:'fill up the fuel'},
     {col:'yellow', fill:'#f5c400', ico:'💡', job:'switch on the lights'},
@@ -3003,9 +3447,10 @@ const Rocket = {
     this.n = 10; this.alt = 0; this.cam = 0;
     this.puffs = []; this.bits = [];
     this.si = 0; this.lane = 1; this.rx = this.laneX(1);
-    this.rocks = []; this.gems = []; this.legT = 0; this.spawnT = 0;
-    this.stars = 0; this.bumps = 0; this.wob = 0; this.shield = 0; this.spin = 0;
-    this.planet = null; this.away = null; this.ready = false;
+    this.haz = []; this.goods = []; this.legT = 0; this.spawnT = 0; this.ft = 0;
+    this.stars = 0; this.lives = this.LIVES; this.tries = 0; this.hits = 0;
+    this.wob = 0; this.inv = 0; this.bubble = 0; this.spin = 0; this.banner = null;
+    this.planet = null; this.away = null;
     this.field = Array.from({length: 120}, () => ({ x: Math.random(), y: Math.random(), z: .25 + Math.random() * .75 }));
   },
   layout(W, H){
@@ -3020,11 +3465,12 @@ const Rocket = {
   },
   resize(W, H){
     const ky = H / this.H, kx = W / this.W;
-    [this.rocks, this.gems, this.puffs, this.bits].forEach(list => list.forEach(o => { o.y *= ky; if (o.x != null) o.x *= kx; }));
+    [this.haz, this.goods, this.puffs, this.bits].forEach(list => list.forEach(o => { o.y *= ky; if (o.x != null) o.x *= kx; if (o.v) o.v *= ky; }));
     if (this.planet) this.planet.y *= ky;
     if (this.away) this.away.y *= ky;
     this.ax *= kx; this.atx *= kx;
     this.layout(W, H); this.rx = this.laneX(this.lane);
+    this.haz.forEach(h => this.size(h));
   },
   laneX(i){ return this.W * (2 * i + 1) / 6; },
   doorX(){ return this.padX - this.s * .62; },
@@ -3056,15 +3502,12 @@ const Rocket = {
       if (Math.hypot(x - this.W / 2, y - this.H * .875) < this.bigR() * 1.3){
         this.scene = 'lift'; this.t = 0; cheer(); thud(); speak('Blast off!');
       }
-    } else if (sc === 'fly' || sc === 'visit'){
-      this.lane = this.cl(Math.floor(x / (this.W / 3)), 0, 2);
-      if (sc === 'visit' && this.ready) this.leave();
-    }
+    } else if (sc === 'fly' || sc === 'oops') this.lane = this.cl(Math.floor(x / (this.W / 3)), 0, 2);
   },
   move(x, y){
     if (!this.held) return;
     if (this.scene === 'walk') this.atx = this.cl(x, this.W * .06, this.doorX() + 2);
-    else if (this.scene === 'fly' || this.scene === 'visit') this.lane = this.cl(Math.floor(x / (this.W / 3)), 0, 2);
+    else if (this.scene === 'fly' || this.scene === 'oops') this.lane = this.cl(Math.floor(x / (this.W / 3)), 0, 2);
   },
   up(){ this.held = false; },
 
@@ -3121,13 +3564,19 @@ const Rocket = {
       if (this.t < 1.6 && Math.random() < dt * 40) this.puff(this.padX, this.gy, true);
       if (this.t > 3.6){
         this.scene = 'warp'; this.t = 0;
-        speak('Whoosh! Off to Neptune, the planet furthest from the Sun. Steer with your finger. Dodge the space rocks, and catch the stars!');
+        speak('Whoosh! Off to Neptune, the planet furthest from the Sun. Steer with your finger. Dodge the space rocks, and catch the stars! You have two lives.');
       }
     } else if (sc === 'warp'){
       this.scrollField(dt, H * 3);
       if (this.t > 1.8){ this.scene = 'fly'; this.t = 0; this.legT = 0; this.spawnT = 3; }
-    } else if (sc === 'fly' || sc === 'visit'){
+    } else if (sc === 'fly'){
       this.fly(dt);
+    } else if (sc === 'oops'){
+      this.fly(dt);
+      if (this.t > 2.4){
+        this.scene = 'fly'; this.t = 0; this.lives = this.LIVES; this.legT = 0; this.spawnT = 1.2;
+        speak('Two new lives. Off we go again!');
+      }
     } else if (sc === 'home'){
       this.fly(dt);
       if (this.t > 2.6){ this.scene = 'land'; this.t = 0; this.landed = false; this.ax = this.doorX(); }
@@ -3144,90 +3593,169 @@ const Rocket = {
     }
   },
   landY(){ const u = Math.min(1, this.t / 3), e = 1 - Math.pow(1 - u, 3); return this.gy - (1 - e) * (this.gy + this.s * 2); },
-  speed(){ return this.H * (.34 + .022 * Math.min(this.si, 9)); },
+  // Much faster at every checkpoint; a little slower for each try at the same stretch.
+  speed(){ return this.H * .34 * (1 + .14 * Math.min(this.si, 9)) * Math.max(.6, 1 - .15 * this.tries); },
   scrollField(dt, sp){ this.field.forEach(f => { f.y += sp * f.z * dt / this.H * .35; if (f.y > 1) { f.y -= 1; f.x = Math.random(); } }); },
+  has(kind){ return STOPS.slice(0, this.si).some(st => st.adds === kind); },
+  fw(){ return this.fs * .56; },
+  fh(){ return this.fs * 1.6; },
+  // A hazard's size, and where it is across the screen
+  size(h){
+    const L = this.W / 6;
+    h.r = Math.min(L * (h.kind === 'rock' ? .42 + h.rr * .18 : h.kind === 'ufo' ? .62 : .5), this.H * (h.kind === 'ufo' ? .08 : .065));
+    h.hw = h.kind === 'junk' ? this.W * .22 : h.kind === 'ufo' ? h.r * 1.25 : h.r * .8;
+    h.hh = h.kind === 'junk' ? h.r * .7 : h.kind === 'ufo' ? h.r * .6 : h.r * .8;
+  },
+  hx(h){
+    const a = this.laneX(h.lane);
+    if (h.kind === 'junk') return a + this.W / 6;
+    if (h.kind === 'ufo') return a + this.W / 3 * (.5 - .5 * Math.cos(h.ph));
+    return a;
+  },
+  // When (on the flight clock) a hazard falling from y at speed v, after `warn`, is level with the rocket
+  window(y, v, hh, warn){
+    const top = this.ry - this.fh(), pad = .3;
+    return [this.ft + warn + (top - hh - y) / v - pad, this.ft + warn + (this.ry + hh - y) / v + pad];
+  },
+  // Would these lanes, blocked from t0 to t1, ever leave no lane clear?
+  fits(lanes, t0, t1){
+    for (let t = t0; t <= t1; t += .05){
+      const busy = new Set(lanes);
+      this.haz.forEach(h => { if (h.t0 <= t && t <= h.t1) for (let i = 0; i < HAZ[h.kind].w; i++) busy.add(h.lane + i); });
+      if (busy.size >= 3) return false;
+    }
+    return true;
+  },
   fly(dt){
     const W = this.W, H = this.H, sp = this.speed();
+    this.ft += dt;
     this.scrollField(dt, sp);
     this.rx += this.cl(this.laneX(this.lane) - this.rx, -W * 3 * dt, W * 3 * dt);
-    this.wob = Math.max(0, this.wob - dt); this.shield = Math.max(0, this.shield - dt);
-    this.spin = Math.max(0, this.spin - dt);
+    this.wob = Math.max(0, this.wob - dt); this.inv = Math.max(0, this.inv - dt);
+    this.bubble = Math.max(0, this.bubble - dt); this.spin = Math.max(0, this.spin - dt);
+    if (this.banner && (this.banner.t -= dt) <= 0) this.banner = null;
     if (this.scene === 'fly'){
       this.legT += dt;
-      if (this.legT < this.LEG - 1.5){
+      if (this.legT < this.LEG - 1.2){
         this.spawnT -= dt;
         if (this.spawnT <= 0){ this.spawn(); this.spawnT = this.gap(); }
       }
       if (this.legT >= this.LEG && !this.planet){
         const st = STOPS[this.si] || STOPS[5];     // after the Sun, the stop is Earth again
         const R = this.radius(st);
-        this.planet = { st, y: -R * (st.key === 'saturn' ? 1.6 : 1.2), home: this.si >= STOPS.length };
+        this.planet = { st, y: -R * (st.key === 'saturn' ? 2.4 : 1.3), home: this.si >= STOPS.length };
       }
     }
     if (this.planet && this.scene === 'fly'){
-      const p = this.planet, to = this.planetY(p.st);
-      p.y = Math.min(to, p.y + sp * .7 * dt);
-      if (p.y >= to){
-        if (p.home){ this.scene = 'home'; this.t = 0; speak('Home sweet home! Time to land.'); }
-        else {
-          this.scene = 'visit'; this.t = 0; this.ready = false;
-          speak(`${p.st.name}! ${p.st.fact}`);
-          this.readyIn = 1.5 + p.st.fact.split(' ').length * .42;
-        }
+      const p = this.planet;
+      if (p.home){
+        p.y = Math.min(this.H * .26, p.y + sp * .7 * dt);
+        if (p.y >= this.H * .26){ this.scene = 'home'; this.t = 0; this.haz = []; speak('Home sweet home! Time to land.'); }
+      } else if (p.st.sun){
+        p.y = Math.min(this.H * .02, p.y + sp * .7 * dt);
+        if (p.y >= this.H * .02) this.pass();
+      } else {
+        p.y += sp * .7 * dt;
+        if (p.y >= this.H * .3) this.pass();
       }
     }
-    if (this.scene === 'visit' && !this.ready && this.t > this.readyIn){ this.ready = true; }
-    if (this.away){ this.away.y += sp * dt; if (this.away.y - this.radius(this.away.st) * 2.5 > H) this.away = null; }
-    // rocks come at you a little faster than the stars drift past
-    const fw = this.fs * .56, fh = this.fs * 1.6, top = this.ry - fh;
-    for (const k of this.rocks){
-      k.y += sp * 1.15 * dt; k.rot += k.spin * dt;
-      const x = this.laneX(k.lane);
-      if (!k.gone && Math.abs(x - this.rx) < k.r * .75 + fw * .4 && k.y + k.r * .75 > top + fh * .08 && k.y - k.r * .75 < this.ry - fh * .12){
-        k.gone = true; this.bumps++; thud();
-        this.burst(x, k.y, '#9b8f82', 10);
-        this.wob = .5; this.shield = .7;
-        if (this.stars > 0){ this.stars--; this.burst(this.rx, top, '#ffd84a', 5); }
-        if (this.bumps === 1) speak('Bump! The shields kept us safe. Steer round the rocks!');
+    if (this.away){
+      const a = this.away, R = this.radius(a.st);
+      a.y += (a.st.sun ? -.5 : .7) * sp * dt;     // the Sun falls away behind as the rocket turns round
+      if (a.y - R * 2.5 > H || a.y + R * 1.8 < 0) this.away = null;
+    }
+    const fw = this.fw(), fh = this.fh(), top = this.ry - fh;
+    for (const h of this.haz){
+      if (h.warn > 0){ h.warn -= dt; continue; }
+      h.y += h.v * dt; h.rot += h.spin * dt; h.ph += dt * 2.2;
+      const x = this.hx(h);
+      if (!h.gone && Math.abs(x - this.rx) < h.hw * .8 + fw * .4 && h.y + h.hh * .8 > top + fh * .08 && h.y - h.hh * .8 < this.ry - fh * .12){
+        h.gone = true; this.hurt(h, x);
       }
     }
-    for (const s of this.gems){
-      s.y += sp * dt;
+    for (const s of this.goods){
+      s.y += s.v * dt;
       const x = this.laneX(s.lane);
-      if (!s.got && Math.abs(x - this.rx) < fw * .9 && s.y > top - fh * .1 && s.y < this.ry){
-        s.got = true; this.stars++; ping(); this.burst(x, s.y, '#ffd84a', 8);
+      if (!s.got && Math.abs(x - this.rx) < fw * .9 && s.y > top - fh * .1 && s.y < this.ry){ s.got = true; this.collect(s, x); }
+    }
+    this.haz = this.haz.filter(h => !h.gone && h.y - h.r * 3 < H);
+    this.goods = this.goods.filter(s => !s.got && s.y < H + 40);
+  },
+  hurt(h, x){
+    const col = { rock: '#9b8f82', ufo: '#7dd87d', comet: '#bfe9ff', fire: '#ff9a2e', junk: '#f5c400' }[h.kind];
+    this.burst(x, h.y, col, 12);
+    if (this.bubble > 0 || this.inv > 0 || this.scene !== 'fly'){ if (this.bubble > 0) ping(); return; }   // bounced off
+    thud(); this.wob = .5; this.lives--; this.hits++;
+    this.burst(this.rx, this.ry - this.fh() * .6, '#ff4d6d', 8);
+    if (this.lives <= 0){ this.oops(); return; }
+    this.inv = 1.5;                              // a moment to get clear before the next one counts
+    if (this.hits === 1) speak('Ouch! That cost a life. Steer round them!');
+    else if (this.lives === 1) speak('Careful, one life left!');
+  },
+  oops(){
+    this.scene = 'oops'; this.t = 0; this.tries++; this.inv = 0; this.planet = null;
+    this.haz.forEach(h => this.burst(this.hx(h), h.y, '#cccccc', 6));
+    this.haz = []; this.goods = [];
+    const back = this.si ? SOLAR[STOPS[this.si - 1].key].name : 'the start';
+    speak(`Oh no, no lives left! Back to ${back}, and try that bit again.`);
+  },
+  collect(s, x){
+    if (s.kind === 'star'){ this.stars++; ping(); this.burst(x, s.y, '#ffd84a', 8); return; }
+    cheer();
+    if (s.kind === 'dust'){
+      this.burst(x, s.y, '#c77dff', 14);
+      if (this.lives < this.MAX_LIVES){ this.lives++; speak('Extra life!'); }
+      else { this.stars += 3; speak('All your lives are full, so have three stars!'); }
+    } else { this.bubble = 5; this.burst(x, s.y, '#7fe8ff', 14); speak('Bubble shield!'); }
+  },
+  gap(){ const st = STOPS[this.si]; return Math.max(.6, 1.3 - .05 * this.si) * (st && st.belt ? .7 : 1); },
+  spawn(){
+    const st = STOPS[this.si], belt = st && st.belt, sp = this.speed();
+    const kinds = [['rock', belt ? 6 : 3]];
+    ['ufo', 'comet', 'fire', 'junk'].forEach(k => { if (this.has(k)) kinds.push([k, k === 'fire' ? 1.3 : 1]); });
+    let r = Math.random() * kinds.reduce((a, k) => a + k[1], 0), kind = 'rock';
+    for (const [k, w] of kinds){ if ((r -= w) < 0){ kind = k; break; } }
+    const make = (kind, lanes) => {
+      const h = { kind, lane: Math.min(...lanes), y: 0, v: sp * HAZ[kind].fall, warn: HAZ[kind].warn || 0,
+        rot: Math.random() * 6, spin: (Math.random() - .5) * (kind === 'junk' ? .6 : 2), ph: Math.random() * 6, rr: Math.random(),
+        pts: Array.from({length: 9}, () => .75 + Math.random() * .3) };
+      this.size(h); h.y = -h.hh * 1.6;
+      [h.t0, h.t1] = this.window(h.y, h.v, h.hh, h.warn);
+      return h;
+    };
+    // candidate lane sets for this kind, in a random order; the first one that fits is used
+    let tries;
+    if (HAZ[kind].w === 2) tries = shuffle([[0, 1], [1, 2]]);
+    else if (kind === 'rock' && Math.random() < (belt ? .45 : .15 + .03 * this.si)) tries = shuffle([[0, 1], [0, 2], [1, 2]]);
+    else tries = shuffle([[0], [1], [2]]);
+    let used = null;
+    for (const lanes of tries){
+      const list = HAZ[kind].w === 2 ? [make(kind, lanes)] : lanes.map(l => make(kind, [l]));
+      const all = new Set(lanes);
+      if (this.fits([...all], Math.min(...list.map(h => h.t0)), Math.max(...list.map(h => h.t1)))){
+        this.haz.push(...list); used = lanes; break;
       }
     }
-    this.rocks = this.rocks.filter(k => !k.gone && k.y - k.r < H);
-    this.gems = this.gems.filter(s => !s.got && s.y < H + 30);
+    if (!used) return;
+    const free = [0, 1, 2].filter(l => !used.includes(l));
+    // something to catch in a clear lane: now and then space dust or a bubble, once they've come in
+    let good = null;
+    if (this.has('dust') && Math.random() < (this.lives < 2 ? .22 : .1)) good = 'dust';
+    else if (this.has('bubble') && Math.random() < .07) good = 'bubble';
+    else if (Math.random() < .7) good = 'star';
+    if (good && free.length) this.goods.push({ kind: good, lane: pick(free), y: -this.H * .05, v: sp });
   },
-  gap(){ const st = STOPS[this.si]; return Math.max(.8, 1.3 - .05 * this.si) * (st && st.belt ? .7 : 1); },
-  spawn(){
-    const st = STOPS[this.si], lanes = shuffle([0, 1, 2]);
-    const two = Math.random() < (st && st.belt ? .45 : .15 + .03 * this.si);
-    const rock = two ? lanes.slice(0, 2) : [lanes[0]];   // never all three: one lane is always clear
-    rock.forEach(lane => {
-      const r = Math.min(this.W / 6 * (.42 + Math.random() * .18), this.H * .06);
-      this.rocks.push({ lane, y: -r * 1.4, r, rot: Math.random() * 6, spin: (Math.random() - .5) * 2,
-        pts: Array.from({length: 9}, () => .75 + Math.random() * .3) });
-    });
-    if (Math.random() < .75){
-      const free = lanes.filter(l => !rock.includes(l));
-      this.gems.push({ lane: pick(free), y: -this.H * .05 });
-    }
+  // Flown past a checkpoint: faster from here on, and maybe something new to look out for.
+  pass(){
+    const st = this.planet.st, name = SOLAR[st.key].name;
+    this.away = this.planet; this.planet = null;
+    this.si++; this.legT = 0; this.spawnT = 1.6; this.tries = 0;
+    this.banner = { name, add: st.adds, t: 3.2 };
+    ping();
+    if (st.sun) this.spin = 1;                    // a loop-the-loop to turn round for home
+    speak(`${name}! ${st.say}`);
   },
-  leave(){
-    const was = this.planet.st;
-    this.away = this.planet; this.planet = null; this.ready = false;
-    this.si++; this.legT = 0; this.spawnT = 1.2; this.scene = 'fly'; this.t = 0;
-    if (was.sun) this.spin = 1;                       // a loop-the-loop to turn round for home
-    const next = STOPS[this.si];
-    if (!next) speak('Home to Earth! Watch out for the space rocks!');
-    else if (next.belt) speak(`Next stop, ${next.name}! This is the asteroid belt, with lots of space rocks. Watch out!`);
-    else speak(`Next stop, ${next.name}!`);
-  },
-  radius(st){ return st.sun ? Math.min(this.W * .55, this.H * .3) : this.unit * st.size; },
-  planetY(st){ return st.sun ? this.H * .02 : this.H * .26; },
+  radius(st){ return st.sun ? Math.min(this.W * .55, this.H * .3) : this.unit * SOLAR[st.key].size; },
 
   /* ----- drawing ----- */
   draw(){
@@ -3319,7 +3847,7 @@ const Rocket = {
     this.drawGround(cam, lift ? Math.min(1, cam / (H * 1.1)) : 0);
     if (lift && cam > H * .6){                       // home, rising into view below and then falling away
       const k = (cam - H * .6) / H;
-      this.planetAt(STOPS[5], W / 2, H + W * 1.25 - W * .25 * Math.min(1, k * 3) + k * H * .08, W * 1.25);
+      this.planetAt('earth', W / 2, H + W * 1.25 - W * .25 * Math.min(1, k * 3) + k * H * .08, W * 1.25);
     }
     g.save(); g.translate(0, cam);
     this.drawPuffs();
@@ -3376,32 +3904,42 @@ const Rocket = {
   drawSpace(){
     const g = this.g, W = this.W, H = this.H, sc = this.scene;
     this.space(1);
-    if (sc === 'fly' || sc === 'visit' || sc === 'home'){
+    if (sc === 'fly' || sc === 'oops' || sc === 'home'){
       g.strokeStyle = 'rgba(255,255,255,.1)'; g.lineWidth = 2; g.setLineDash([10, 14]);
       [1, 2].forEach(i => { g.beginPath(); g.moveTo(W * i / 3, 0); g.lineTo(W * i / 3, H); g.stroke(); });
       g.setLineDash([]);
     }
-    if (this.away) this.planetAt(this.away.st, W / 2, this.away.y, this.radius(this.away.st));
+    if (this.away) this.planetAt(this.away.st.key, W / 2, this.away.y, this.radius(this.away.st));
     if (this.planet){
       let R = this.radius(this.planet.st);
       if (sc === 'home') R *= 1 + Math.min(this.t, 2.6) * .9;   // home rushes up to meet you
-      this.planetAt(this.planet.st, W / 2, this.planet.y + (sc === 'home' ? this.t * H * .1 : 0), R);
+      this.planetAt(this.planet.st.key, W / 2, this.planet.y + (sc === 'home' ? this.t * H * .1 : 0), R);
     }
-    this.gems.forEach(s => this.starShape(this.laneX(s.lane), s.y, Math.min(W * .055, 24), '#ffd84a'));
-    this.rocks.forEach(k => this.rockAt(this.laneX(k.lane), k.y, k));
+    const now = performance.now() / 1000;
+    this.haz.forEach(h => {                     // a flashing lane says a comet or a fireball is coming
+      if (h.warn > 0 && Math.floor(h.warn * 6) % 2 === 0){
+        const x = this.laneX(h.lane);
+        g.fillStyle = h.kind === 'fire' ? 'rgba(255,120,30,.22)' : 'rgba(255,60,80,.2)'; g.fillRect(x - W / 6, 0, W / 3, H);
+        this.warnSign(x, H * .22, Math.min(W * .07, 30));
+      }
+    });
+    this.goods.forEach(s => this.goodAt(s.kind, this.laneX(s.lane), s.y, now));
+    this.haz.forEach(h => { if (h.warn <= 0) this.hazAt(h, this.hx(h), h.y, now); });
     this.bits.forEach(b => { g.globalAlpha = Math.max(0, b.life / .7); Mini.dot(b.x, b.y, 4, b.colour); });
     g.globalAlpha = 1;
     if (sc !== 'warp' || this.t > .2){
       const wob = this.wob > 0 && !reduced ? Math.sin(this.wob * 40) * .18 * this.wob : 0;
       const spin = this.spin > 0 ? (1 - this.spin) * Math.PI * 2 : 0;
       const cy = this.ry - this.fs * .8;
+      if (this.inv > 0 && Math.floor(this.inv * 8) % 2) g.globalAlpha = .35;    // blinks while it can't be hurt again
       g.save(); g.translate(this.rx, cy); g.rotate(wob + (reduced ? 0 : spin)); g.translate(-this.rx, -cy);
-      this.rocketAt(this.rx, this.ry, this.fs, { flame: .8, crew: true, lights: true });
-      g.restore();
-      if (this.shield > 0){
-        g.globalAlpha = this.shield / .7 * .8; g.lineWidth = 4; g.strokeStyle = '#7fe8ff';
-        g.beginPath(); g.ellipse(this.rx, cy, this.fs * .75, this.fs * 1.1, 0, 0, Math.PI * 2); g.stroke();
-        g.globalAlpha = 1;
+      this.rocketAt(this.rx, this.ry, this.fs, { flame: .8 + .25 * Math.min(this.si, 9) / 9, crew: true, lights: true });
+      g.restore(); g.globalAlpha = 1;
+      if (this.bubble > 0 && (this.bubble > 1.2 || Math.floor(this.bubble * 6) % 2)){
+        const gr = g.createRadialGradient(this.rx - this.fs * .3, cy - this.fs * .4, this.fs * .1, this.rx, cy, this.fs * 1.15);
+        gr.addColorStop(0, 'rgba(255,255,255,.35)'); gr.addColorStop(.7, 'rgba(127,232,255,.12)'); gr.addColorStop(1, 'rgba(127,232,255,.45)');
+        g.fillStyle = gr; g.beginPath(); g.arc(this.rx, cy, this.fs * 1.15, 0, Math.PI * 2); g.fill();
+        g.lineWidth = 3; g.strokeStyle = 'rgba(160,240,255,.9)'; g.stroke();
       }
     }
     if (sc === 'home' && this.t > 1.8){                 // fade into Earth's blue sky
@@ -3409,49 +3947,118 @@ const Rocket = {
     }
     if (sc === 'warp' && this.t < .5){ g.fillStyle = `rgba(255,255,255,${(.5 - this.t) * 1.2})`; g.fillRect(0, 0, W, H); }
     this.drawHud();
-    if (sc === 'visit') this.drawFact();
+    if (this.banner) this.drawBanner();
+    if (sc === 'oops') Mini.text('Try again!', W / 2, H * .42, Math.min(54, W * .13), '#f5c400');
   },
   drawHud(){
     const g = this.g, W = this.W, H = this.H;
-    // the trip so far: one dot per stop, in its own colour, lit once visited
+    // the trip so far: one dot per checkpoint, in its own colour, lit once passed
     const x0 = W * .1, x1 = W * .7, y = Math.max(22, H * .035);
     Mini.rect(W * .04, y - 16, W * .93, 32, 16, 'rgba(6,10,34,.55)');   // readable over the Sun too
     Mini.line(x0, y, x1, y, 'rgba(255,255,255,.25)', 3);
     STOPS.forEach((st, i) => {
-      const x = x0 + (x1 - x0) * i / (STOPS.length - 1), r = st.sun ? 9 : 4 + st.size * 4;
-      const been = i < this.si || (i === this.si && this.scene === 'visit');
-      g.globalAlpha = been ? 1 : .35; Mini.dot(x, y, r, st.c[1]); g.globalAlpha = 1;
-      if (i === this.si && this.scene !== 'visit') Mini.dot(x, y, r + 5, null, '#fff');
+      const x = x0 + (x1 - x0) * i / (STOPS.length - 1), r = st.sun ? 9 : 4 + SOLAR[st.key].size * 4;
+      g.globalAlpha = i < this.si ? 1 : .35; Mini.dot(x, y, r, st.dot); g.globalAlpha = 1;
+      if (i === this.si) Mini.dot(x, y, r + 5, null, '#fff');
     });
     this.starShape(W * .84, y, 14, '#ffd84a');
     Mini.text(String(this.stars), W * .93, y + 1, 24, '#fff');
+    // lives: full hearts and empty ones, up to the most you can have
+    const hs = Math.min(15, W * .036), hy = y + 34;
+    Mini.rect(W * .04, hy - hs - 5, hs * 2.6 * this.MAX_LIVES + 14, hs * 2 + 10, hs + 5, 'rgba(6,10,34,.55)');
+    for (let i = 0; i < this.MAX_LIVES; i++) this.heart(W * .04 + 7 + hs * 1.3 + i * hs * 2.6, hy, hs, i < this.lives ? '#ff4d6d' : 'rgba(255,255,255,.18)');
   },
-  wrap(text, maxW){
-    const g = this.g, out = []; let line = '';
-    text.split(' ').forEach(w => {
-      const t = line ? line + ' ' + w : w;
-      if (g.measureText(t).width > maxW && line){ out.push(line); line = w; } else line = t;
-    });
-    if (line) out.push(line);
-    return out;
-  },
-  drawFact(){
-    const g = this.g, W = this.W, H = this.H, st = this.planet.st;
-    const R = this.radius(st), top = st.sun ? this.planet.y + R + 16 : this.planet.y + R * (st.key === 'saturn' ? .8 : 1) + 16;
-    const size = Math.max(16, Math.min(21, W * .05));
-    g.font = `700 ${size}px "Baloo 2","Trebuchet MS",sans-serif`;
-    const x0 = Math.max(66, (W - 520) / 2), x1 = x0 > 66 ? W - x0 : W - 12, cx = (x0 + x1) / 2;   // clear of the ✕ on the left
-    const lines = this.wrap(st.fact, x1 - x0 - 24), lh = size * 1.25;
-    const nameS = Math.min(40, W * .1), boxH = nameS * 1.2 + lines.length * lh + 18;
-    Mini.rect(x0, top, x1 - x0, boxH, 18, 'rgba(10,16,48,.78)', 'rgba(255,255,255,.25)', 2);
-    Mini.text(st.name, cx, top + nameS * .7, nameS, st.c[0]);
-    g.font = `700 ${size}px "Baloo 2","Trebuchet MS",sans-serif`;
-    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    lines.forEach((l, i) => g.fillText(l, cx, top + nameS * 1.3 + lh * (i + .5)));
-    if (this.ready){
-      const b = reduced ? 0 : Math.sin(performance.now() / 220) * 4;
-      Mini.text('Tap to fly on!', cx, Math.max(top + boxH + 26, Math.min(top + boxH + 34, this.ry - this.fs * 1.8)) + b, Math.min(30, W * .075), '#f5c400');
+  // "Saturn ✓", and a picture of whatever is new from here on
+  drawBanner(){
+    const g = this.g, W = this.W, H = this.H, b = this.banner, a = Math.min(1, b.t / .5, (3.2 - b.t) / .25);
+    g.globalAlpha = Math.max(0, a);
+    const y = H * .52, big = Math.min(46, W * .11);       // under the planet that's just gone by, above the rocket
+    Mini.text(`${b.name} ✓`, W / 2, y, big, '#fff');
+    if (b.add){
+      const r = Math.min(W * .08, 34), now = performance.now() / 1000;
+      Mini.rect(W / 2 - r * 2.2, y + big * .75, r * 4.4, r * 3.1, 18, 'rgba(6,10,34,.7)', 'rgba(255,255,255,.4)', 2);
+      const cy = y + big * .75 + r * 1.55;
+      if (b.add === 'dust' || b.add === 'bubble') this.goodAt(b.add, W / 2, cy, now, r * 1.1);
+      else {
+        const h = { kind: b.add, rot: 0, ph: 0, rr: .5, pts: Array(9).fill(.9) };
+        this.size(h);
+        const k = r / Math.max(h.r, h.hw * .55);
+        g.save(); g.translate(W / 2, cy); g.scale(k, k); this.hazAt(h, 0, 0, now); g.restore();
+      }
     }
+    g.globalAlpha = 1;
+  },
+  heart(x, y, s, fill){
+    const g = this.g;
+    g.beginPath(); g.moveTo(x, y + s * .9);
+    g.bezierCurveTo(x - s * 1.4, y - s * .1, x - s * .6, y - s * 1.1, x, y - s * .35);
+    g.bezierCurveTo(x + s * .6, y - s * 1.1, x + s * 1.4, y - s * .1, x, y + s * .9);
+    g.fillStyle = fill; g.fill();
+  },
+  warnSign(x, y, s){
+    const g = this.g;
+    g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s * 1.1, y + s * .8); g.lineTo(x - s * 1.1, y + s * .8); g.closePath();
+    g.fillStyle = '#f5c400'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#7a1020'; g.stroke();
+    Mini.text('!', x, y + s * .15, s * 1.2, '#7a1020');
+  },
+  // Things to catch: stars, space dust (a heart in a purple sparkle) and bubbles
+  goodAt(kind, x, y, now, size){
+    const g = this.g, W = this.W;
+    if (kind === 'star'){ this.starShape(x, y, size || Math.min(W * .055, 24), '#ffd84a'); return; }
+    const r = size || Math.min(W * .065, 28);
+    if (kind === 'dust'){
+      const gl = g.createRadialGradient(x, y, 0, x, y, r * 1.5);
+      gl.addColorStop(0, 'rgba(210,140,255,.75)'); gl.addColorStop(1, 'rgba(160,80,255,0)');
+      g.fillStyle = gl; g.beginPath(); g.arc(x, y, r * 1.5, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 8; i++){
+        const a = i * .785 + now * 1.5, d = r * (.9 + .25 * Math.sin(now * 4 + i));
+        Mini.dot(x + Math.cos(a) * d, y + Math.sin(a) * d, r * .09, '#f3d9ff');
+      }
+      this.heart(x, y, r * .5, '#ff4d6d');
+    } else {
+      const gr = g.createRadialGradient(x - r * .35, y - r * .35, r * .1, x, y, r);
+      gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(.35, 'rgba(160,240,255,.35)'); gr.addColorStop(1, 'rgba(90,200,255,.65)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 2.5; g.strokeStyle = 'rgba(200,250,255,.95)'; g.stroke();
+    }
+  },
+  hazAt(h, x, y, now){
+    const g = this.g, r = h.r;
+    if (h.kind === 'rock') return this.rockAt(x, y, h);
+    if (h.kind === 'ufo'){
+      g.save(); g.translate(x, y);
+      g.beginPath(); g.arc(0, -r * .1, r * .62, Math.PI, 0); g.fillStyle = 'rgba(170,240,255,.7)'; g.fill();    // the glass dome
+      Mini.dot(0, -r * .36, r * .36, '#7dd87d');                                                              // the alien
+      [-1, 1].forEach(k => { g.fillStyle = '#10301a'; g.beginPath(); g.ellipse(k * r * .14, -r * .4, r * .08, r * .13, k * .4, 0, Math.PI * 2); g.fill(); });
+      [-1, 1].forEach(k => { g.strokeStyle = '#5cb85c'; g.lineWidth = 2; g.beginPath(); g.moveTo(k * r * .15, -r * .68); g.lineTo(k * r * .25, -r * .86); g.stroke(); Mini.dot(k * r * .25, -r * .86, r * .06, '#5cb85c'); });
+      const body = g.createLinearGradient(0, -r * .3, 0, r * .4);
+      body.addColorStop(0, '#e3e8ef'); body.addColorStop(1, '#6f7a88');
+      g.fillStyle = body; g.beginPath(); g.ellipse(0, r * .05, r * 1.25, r * .35, 0, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 2; g.strokeStyle = '#3d4652'; g.stroke();
+      for (let i = 0; i < 5; i++) Mini.dot((i - 2) * r * .45, r * .12, r * .08, Math.floor(now * 4 + i) % 2 ? '#ffe14d' : '#ff6b6b');
+      g.restore(); return;
+    }
+    if (h.kind === 'comet' || h.kind === 'fire'){
+      const fire = h.kind === 'fire', L = r * 4.5;
+      const tail = g.createLinearGradient(0, y, 0, y - L);
+      tail.addColorStop(0, fire ? 'rgba(255,200,60,.9)' : 'rgba(200,240,255,.9)'); tail.addColorStop(1, fire ? 'rgba(255,60,0,0)' : 'rgba(120,180,255,0)');
+      g.fillStyle = tail; g.beginPath(); g.moveTo(x - r * .75, y); g.quadraticCurveTo(x, y - L * 1.1, x + r * .75, y); g.closePath(); g.fill();
+      const core = g.createRadialGradient(x, y, 0, x, y, r * .8);
+      core.addColorStop(0, '#ffffff'); core.addColorStop(.5, fire ? '#ffd23f' : '#cfefff'); core.addColorStop(1, fire ? '#ff5a1f' : '#6fb6ff');
+      g.fillStyle = core; g.beginPath(); g.arc(x, y, r * .8 * (fire && !reduced ? .92 + .08 * Math.sin(now * 20) : 1), 0, Math.PI * 2); g.fill();
+      return;
+    }
+    // junk: an old satellite, a gold box with two wide solar panels
+    g.save(); g.translate(x, y); g.rotate(Math.sin(h.rot) * .12);
+    const pw = h.hw * .78, ph = h.hh * .9;
+    [-1, 1].forEach(k => {
+      g.fillStyle = '#2a4f9e'; g.fillRect(k > 0 ? r * .45 : -r * .45 - pw, -ph / 2, pw, ph);
+      g.strokeStyle = '#9fc0ff'; g.lineWidth = 1.5; g.strokeRect(k > 0 ? r * .45 : -r * .45 - pw, -ph / 2, pw, ph);
+      g.beginPath(); for (let i = 1; i < 4; i++){ const xx = k * (r * .45 + pw * i / 4); g.moveTo(xx, -ph / 2); g.lineTo(xx, ph / 2); } g.stroke();
+    });
+    g.fillStyle = '#d9a520'; g.fillRect(-r * .5, -r * .5, r, r); g.strokeStyle = '#8a6510'; g.lineWidth = 2; g.strokeRect(-r * .5, -r * .5, r, r);
+    g.strokeStyle = '#ccc'; g.beginPath(); g.moveTo(0, -r * .5); g.lineTo(0, -r * .95); g.stroke(); Mini.dot(0, -r * .98, r * .1, '#ff6b6b');
+    g.restore();
   },
   drawLand(){
     const g = this.g, s = this.s;
@@ -3548,64 +4155,7 @@ const Rocket = {
     [[.3, -.2, .22], [-.3, .3, .16]].forEach(([cx, cy, cr]) => { g.beginPath(); g.arc(cx * k.r, cy * k.r, cr * k.r, 0, Math.PI * 2); g.fillStyle = 'rgba(40,32,26,.35)'; g.fill(); });
     g.restore();
   },
-  // A planet with a light side and a dark side, plus whatever makes it itself.
-  planetAt(st, x, y, R){
-    const g = this.g;
-    if (st.sun){
-      const glow = g.createRadialGradient(x, y, R * .6, x, y, R * 1.5);
-      glow.addColorStop(0, 'rgba(255,190,40,.6)'); glow.addColorStop(1, 'rgba(255,120,0,0)');
-      g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 1.5, 0, Math.PI * 2); g.fill();
-      const body = g.createRadialGradient(x, y, R * .1, x, y, R);
-      body.addColorStop(0, st.c[0]); body.addColorStop(.7, st.c[1]); body.addColorStop(1, st.c[2]);
-      g.fillStyle = body; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.fill();
-      return;
-    }
-    const ring = (from, to) => {
-      g.save(); g.translate(x, y); g.rotate(-.28);
-      g.lineWidth = R * .22; g.strokeStyle = 'rgba(230,205,150,.9)';
-      g.beginPath(); g.ellipse(0, 0, R * 1.95, R * .5, 0, from, to); g.stroke();
-      g.lineWidth = R * .08; g.strokeStyle = 'rgba(160,130,80,.9)';
-      g.beginPath(); g.ellipse(0, 0, R * 1.62, R * .4, 0, from, to); g.stroke();
-      g.restore();
-    };
-    if (st.key === 'saturn') ring(Math.PI, Math.PI * 2);           // the back half of the rings
-    if (st.key === 'uranus'){                                     // faint rings, standing on end
-      g.save(); g.lineWidth = 2; g.strokeStyle = 'rgba(220,250,255,.45)';
-      g.beginPath(); g.ellipse(x, y, R * .3, R * 1.55, .1, 0, Math.PI * 2); g.stroke(); g.restore();
-    }
-    g.save(); g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.clip();
-    g.fillStyle = st.c[1]; g.fillRect(x - R, y - R, R * 2, R * 2);
-    if (st.key === 'jupiter' || st.key === 'saturn'){
-      const bands = st.key === 'jupiter' ? ['#e9c9a3', '#b9835a', '#f3dcc0', '#a8704a', '#e2bb94', '#c79066', '#f0d6b8'] : ['#efd59c', '#d8b26a', '#f4e1b5', '#cfa65e', '#ead090'];
-      bands.forEach((c, i) => { g.fillStyle = c; g.fillRect(x - R, y - R + i * R * 2 / bands.length, R * 2, R * 2 / bands.length + 1); });
-      if (st.key === 'jupiter'){
-        g.fillStyle = '#c4492e'; g.beginPath(); g.ellipse(x + R * .3, y + R * .3, R * .24, R * .14, 0, 0, Math.PI * 2); g.fill();
-      }
-    } else if (st.key === 'earth'){
-      g.fillStyle = '#4caf50';
-      [[-.35, -.25, .38, .3], [.35, .25, .3, .42], [-.1, .55, .22, .14]].forEach(([a, b, rx, ry]) => { g.beginPath(); g.ellipse(x + a * R, y + b * R, rx * R, ry * R, .4, 0, Math.PI * 2); g.fill(); });
-      g.fillStyle = 'rgba(255,255,255,.75)';
-      [[-.2, -.65, .4, .08], [.25, -.05, .35, .07], [-.45, .35, .3, .06]].forEach(([a, b, rx, ry]) => { g.beginPath(); g.ellipse(x + a * R, y + b * R, rx * R, ry * R, -.2, 0, Math.PI * 2); g.fill(); });
-    } else if (st.key === 'mars'){
-      g.fillStyle = '#a73d1d';
-      [[-.3, .1, .3, .18], [.3, -.3, .22, .14]].forEach(([a, b, rx, ry]) => { g.beginPath(); g.ellipse(x + a * R, y + b * R, rx * R, ry * R, .3, 0, Math.PI * 2); g.fill(); });
-      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(x, y - R * .92, R * .35, R * .14, 0, 0, Math.PI * 2); g.fill();
-    } else if (st.key === 'mercury'){
-      g.fillStyle = 'rgba(70,70,70,.4)';
-      [[-.3, -.2, .2], [.35, .1, .15], [-.05, .45, .12], [.2, -.5, .1]].forEach(([a, b, r]) => { g.beginPath(); g.arc(x + a * R, y + b * R, r * R, 0, Math.PI * 2); g.fill(); });
-    } else if (st.key === 'venus'){
-      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = R * .12;
-      [-.4, 0, .4].forEach(b => { g.beginPath(); g.moveTo(x - R, y + b * R); g.quadraticCurveTo(x, y + b * R - R * .25, x + R, y + b * R); g.stroke(); });
-    } else if (st.key === 'neptune'){
-      g.fillStyle = '#1d3a9e'; g.beginPath(); g.ellipse(x - R * .25, y + R * .15, R * .22, R * .12, 0, 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.ellipse(x + R * .2, y - R * .35, R * .3, R * .05, 0, 0, Math.PI * 2); g.fill();
-    }
-    const shade = g.createRadialGradient(x - R * .4, y - R * .4, R * .1, x, y, R * 1.05);
-    shade.addColorStop(0, 'rgba(255,255,255,.28)'); shade.addColorStop(.6, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,30,.55)');
-    g.fillStyle = shade; g.fillRect(x - R, y - R, R * 2, R * 2);
-    g.restore();
-    if (st.key === 'saturn') ring(0, Math.PI);                    // and the front half
-  }
+  planetAt(key, x, y, R){ drawBody(this.g, key, x, y, R); }
 };
 
 /* ---------- session timeout ---------- */
