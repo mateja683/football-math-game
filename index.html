@@ -640,11 +640,12 @@ const S = {
   keepyBest: saved.keepyBest || 0,
   batBest: saved.batBest || 0,
   bowlBest: saved.bowlBest || 0,
+  catches: saved.catches !== false,
   srTop: saved.srTop === 20 ? 20 : 10,
   srKnow: saved.srKnow && typeof saved.srKnow === 'object' ? saved.srKnow : {},
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,srTop:S.srTop,srKnow:S.srKnow})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,catches:S.catches,srTop:S.srTop,srKnow:S.srKnow})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // Club names label the kits, but the kits themselves are still colours only - no crests,
@@ -4171,31 +4172,50 @@ const Rocket = {
 };
 
 /* ---------- prize game: cricket ---------- */
-// Asked for by the child. One card in the picker, two games behind it, picked on its first
-// screen. Batting is Stick Cricket-style: watch where the ball bounces, then tap or swipe it
-// as it reaches the bat (the swipe sets where it goes). Bowling: fast or spin, tap tap tap to
-// run in for a fast one, then swipe left, middle or right while the needle is in the green.
-// Both are two overs (BALLS) and, like every prize game, can't be lost: a wicket is shrugged
-// off ("next ball!") and the innings always runs its two overs.
+// Asked for by the child. One card in the picker, four games behind it, picked on its first
+// screen: batting against the computer (Stick Cricket-style - watch where the ball bounces,
+// then tap or swipe it as it reaches the bat), bowling at the computer (fast or spin, tap to
+// run in, swipe left, middle or right), a match (bowl two overs, then bat to beat their
+// score), and two players (the grown-up bowls from the far end, with the controls turned
+// round to face them). Every innings is two overs (BALLS) and, like every prize game, none
+// of it can be lost: a wicket is shrugged off ("next ball!"), the innings always runs its
+// overs, and a chase that falls short gets extra overs.
 // The pitch is drawn in perspective from behind whoever is at the near end: d runs 0..1 from
 // the bowler's stumps to the batter's, u is across the pitch (±1 is its edge) and h is height,
 // in the same units as u. `P()` turns those into the screen.
 const Cricket = {
   title: 'Cricket', intro: 'Bat or bowl — you choose!',
   sky: true,
-  BALLS: 12, OVER: 6,
+  BALLS: 12, OVER: 6, MAX_BALLS: 24,  // a chase that falls short gets up to two more overs
   CAM: 1.45,                          // camera to the far stumps, in pitch lengths
   RUN: 1.3,                           // the computer bowler's run-up, seconds
   HIT: .92, EARLY: .76, LATE: 1.04,   // where bat meets ball best, and the window it can meet it in
   STUMP: .2,                          // a ball this close to middle at the stumps hits them
+  RUNT: .8,                           // seconds for one run between the wickets
+  CATCH: .1,                          // how close (radians) a lofted shot must go to a fielder to be caught
+  // The batting view's fielders: [angle from straight back past the bowler, metres from the bat].
+  // Hit between them. Sixes clear them all; only a half-hit lofted swipe can be caught.
+  RING: [[-1.0, 26], [-.5, 31], [-.1, 24], [.45, 31], [.95, 26]],
+  // The bowling view's: two slips beside the keeper, then mid-off and mid-on, as [d, u].
+  CLOSE: [[1.3, .5], [1.27, .95], [.42, 1.8], [.42, -1.8]],
   setup(W, H){
     this.g = Mini.ctx(); this.lay(W, H);
-    this.mode = ''; this.phase = 'choose'; this.t = 0; this.clock = 0; this.asked = false;
-    this.runs = 0; this.wkts = 0; this.legal = 0; this.log = [];
-    this.flash = ''; this.flashCol = '#fff'; this.wait = 0;
-    this.ball = null; this.fly = null; this.hit = null; this.press = null; this.swing = null; this.fall = null; this.swung = false;
-    this.told = {}; this.last = ''; this.type = ''; this.prog = 0; this.pace = 0; this.pace0 = 0; this.stride = 0;
+    this.kind = ''; this.mode = ''; this.duo = false; this.phase = 'choose'; this.t = 0; this.clock = 0; this.asked = false;
+    this.target = 0; this.theirs = 0; this.told = {};
     this.crowd = Array.from({length: 110}, () => ({ x: Math.random(), y: Math.random(), c: pick(['#e63946','#f5c400','#2f6fe0','#fff','#7a3db8','#ff8a1f']) }));
+    this.innings();
+  },
+  // Everything that starts again with an innings (a match has two).
+  innings(){
+    this.runs = 0; this.wkts = 0; this.legal = 0; this.log = []; this.balls = [];
+    this.maxBalls = this.BALLS; this.sumDone = 0; this.lastSaid = -1;
+    this.flash = ''; this.flashCol = '#fff'; this.wait = 0; this.lastWide = false; this.lastKey = '';
+    this.clear();
+  },
+  // Everything that starts again with a ball.
+  clear(){
+    this.ball = this.fly = this.hit = this.press = this.swing = this.fall = this.dash = this.sum = null;
+    this.swung = false; this.catcher = -1; this.type = ''; this.prog = 0; this.pace = 0; this.pace0 = 0; this.stride = 0;
   },
   lay(W, H){
     this.W = W; this.H = H;
@@ -4214,6 +4234,10 @@ const Cricket = {
   big(d){ return 1 + .6 * Math.max(0, this.z(d) - (this.CAM - 1)); },
   tell(key, line){ if (this.told[key]) return; this.told[key] = true; speak(line); },
   cl(v, a, b){ return Math.min(Math.max(v, a), b); },
+  fielders(){
+    if (this.mode === 'bat') return this.RING.map(([a, m]) => ({ a, d: this.HIT - Math.cos(a) * m / 20, u: Math.sin(a) * m / 4.3 }));
+    return this.CLOSE.map(([d, u]) => ({ d, u }));
+  },
 
   // A delivery: from the hand (u0, h0) to where it bounces (db, ub), then on to the stumps at
   // ue. A fast ball goes straight on; a spinning one turns after the bounce.
@@ -4229,24 +4253,49 @@ const Cricket = {
     return { u0, h0: 1.45, ue, ub, db, T, spin, he: .16 + (.72 - db) * .9, d: 0 };
   },
 
-  /* ----- flow ----- */
+  /* ----- input ----- */
   down(x, y){
     const ph = this.phase;
-    if (ph === 'choose'){
-      const c = this.cards().find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
-      if (!c) return;
-      this.mode = c.mode; ping();
-      if (c.mode === 'bat'){
-        speak('Batting! Watch where the ball bounces, then swipe it when it reaches your bat.');
-        this.phase = 'result'; this.t = 0; this.wait = 3.2;   // let the voice finish before the first ball
-      } else { this.phase = 'pick'; speak('Bowling! Fast or spin?'); }
+    if (ph === 'choose') return this.chooseDown(x, y);
+    if (ph === 'sum') return this.sumDown(x, y);
+    if (ph === 'interval'){ if (this.t > 1.5) this.startChase(); return; }
+    if (this.duo && (ph === 'pick' || ph === 'runup' || ph === 'release')){
+      // The grown-up's half, turned round: their controls are drawn upside down at the top.
+      if (y < this.H * .5) this.bowlerDown(this.W - x, this.H - y, x, y);
       return;
     }
-    if (this.mode === 'bat'){ this.batDown(x, y); return; }
+    if (this.mode === 'bat') this.batDown(x, y);
+    else this.bowlerDown(x, y, x, y);
+  },
+  chooseDown(x, y){
+    const pl = this.pill();
+    if (x >= pl.x && x <= pl.x + pl.w && y >= pl.y && y <= pl.y + pl.h){
+      S.catches = !S.catches; save(); ping(); speak(S.catches ? 'Catches on.' : 'Catches off.'); return;
+    }
+    const c = this.cards().find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+    if (!c) return;
+    this.kind = c.kind; this.duo = c.kind === 'duo'; this.mode = c.kind === 'bowl' || c.kind === 'match' ? 'bowl' : 'bat';
+    ping(); this.t = 0;
+    if (c.kind === 'bat'){
+      speak('Batting! Watch where the ball bounces, then swipe it when it reaches your bat.');
+      this.phase = 'result'; this.wait = 3.2;            // let the voice finish before the first ball
+    } else if (c.kind === 'duo'){
+      speak('Two players! Grown-up, you bowl from the top. Watch where it bounces, then swipe it!');
+      this.phase = 'pick';
+    } else {
+      speak(c.kind === 'match' ? 'A match! You bowl first, then bat to beat their score. Fast or spin?' : 'Bowling! Fast or spin?');
+      this.phase = 'pick';
+    }
+  },
+  // The bowler's controls, hit-tested in the bowler's own coordinates (fx, fy) - turned round
+  // when the grown-up bowls across the table. (x, y) is the real screen point, for the swipe.
+  bowlerDown(fx, fy, x, y){
+    const ph = this.phase;
     if (ph === 'pick'){
-      const i = this.picks().findIndex(b => Math.hypot(x - b.x, y - b.y) < b.r * 1.2);
+      const i = this.picks().findIndex(b => Math.hypot(fx - b.x, fy - b.y) < b.r * 1.2);
       if (i < 0) return;
       this.type = i ? 'spin' : 'fast'; this.phase = 'runup'; this.t = 0; this.prog = 0; this.pace = 0; this.stride = 0;
+      if (this.duo) return;
       if (i) this.tell('spin', 'Spin! Aim to one side, and it spins in to the stumps.');
       else this.tell('fast', 'Fast! Tap tap tap to run in quick!');
     } else if (ph === 'runup' && this.type === 'fast'){
@@ -4259,23 +4308,29 @@ const Cricket = {
     const p = this.press;
     if (!p || p.done || Math.hypot(x - p.x, y - p.y) < 24) return;
     p.done = true;
-    if (this.mode === 'bat'){
-      if (this.swing) this.swing.dir = x < p.x ? -1 : 1;
-      if (this.hit && !this.hit.gone) this.launch(this.cl(Math.atan2(x - p.x, Math.max(10, p.y - y)), -1.1, 1.1), true);
-    } else if (this.phase === 'release') this.release((x - p.x) / Math.hypot(x - p.x, y - p.y), p.q);
+    // The ball goes where the finger went on the screen, whichever end it's swiped from.
+    if (this.phase === 'release'){ this.release((x - p.x) / Math.hypot(x - p.x, y - p.y), p.q); return; }
+    if (this.hit && !this.hit.gone) this.launch(this.cl(Math.atan2(x - p.x, Math.max(10, p.y - y)), -1.1, 1.1), true);
   },
   up(){
     const p = this.press; this.press = null;
     if (!p || p.done) return;
-    if (this.mode === 'bat'){ if (this.hit && !this.hit.gone) this.launch((Math.random() - .5) * .5, false); }
-    else if (this.phase === 'release') this.release(0, p.q);
+    if (this.phase === 'release') this.release(0, p.q);
+    else if (this.hit && !this.hit.gone) this.launch((Math.random() - .5) * .5, false);
   },
+
+  /* ----- flow ----- */
   update(dt){
     this.clock += dt; this.t += dt;
-    if (this.phase === 'choose'){ if (!this.asked && this.t > .3){ this.asked = true; speak('Do you want to bat or bowl?'); } return; }
+    const ph = this.phase;
+    if (ph === 'choose'){ if (!this.asked && this.t > .3){ this.asked = true; speak('Do you want to bat or bowl?'); } return; }
+    if (ph === 'sum'){ if (this.sum.ok && this.t > 1.5) this.nextBall(); return; }
+    if (ph === 'interval'){ if (this.t > 6) this.startChase(); return; }
     if (this.swing) this.swing.t += dt;
     if (this.fall) this.fall.t += dt;
     if (this.fly) this.stepFly(dt);
+    if (this.dash) this.stepDash(dt);
+    if (ph === 'runup' && (this.mode === 'bowl' || this.duo)) this.runup(dt);
     if (this.mode === 'bat') this.updBat(dt); else this.updBowl(dt);
   },
   result(text, col, wait, line){
@@ -4283,27 +4338,99 @@ const Cricket = {
     this.flash = text; this.flashCol = col || '#fff';
     if (line) speak(line);
   },
-  dot(mark){ this.legal++; this.log.push(mark); },
+  // Every ball is remembered with its over, for the adding-up question at the end of each over.
+  dot(mark){ this.balls.push({ m: mark, r: +mark || 0, over: Math.floor(this.legal / this.OVER) }); this.legal++; this.log.push(mark); },
+  wide(){ this.runs++; this.balls.push({ m: 'wd', r: 1, over: Math.floor(this.legal / this.OVER) }); },
   bowled(){
     const b = this.ball; b.d = 1; b.stop = true;
     this.fall = { d: 1, t: 0 }; this.wkts++; this.dot('W'); thud(); ping();
     if (this.mode === 'bat') this.result('Bowled!', '#fff', 2, 'Bowled! Never mind. Next ball!');
     else { cheer(); confetti(S.team); this.result('Bowled!', '#f5c400', 2.2, 'Bowled him! What a ball!'); }
   },
+  caught(i){
+    this.catcher = i; this.wkts++; this.dot('W'); thud();
+    if (this.mode === 'bat') this.result('Caught!', '#fff', 2, 'Caught! Never mind. Next ball!');
+    else { cheer(); confetti(S.team); this.result('Caught!', '#f5c400', 2.2, 'Caught! What a catch!'); }
+  },
+  // Runs off the bat, either side. Fours and sixes are cheered; ones and twos are run, and counted out loud.
+  score(runs, edge){
+    const T = this.fly.T, mine = this.mode === 'bat';
+    this.runs += runs; this.dot(String(runs));
+    if (runs >= 4){
+      if (mine){ cheer(); if (runs === 6) confetti(S.team); }
+      this.result(mine ? (runs === 6 ? 'SIX!' : 'FOUR!') : String(runs), mine ? '#f5c400' : '#fff', T + .8,
+        mine ? (runs === 6 ? 'Six! What a hit!' : 'Four!') : (runs === 6 ? 'Six! A big hit.' : 'Four to them.'));
+    } else {
+      this.dash = { n: runs, t: 0, said: 0 };
+      this.result(runs === 2 ? '2 runs' : '1 run', '#fff', Math.max(T, runs * this.RUNT) + .8, edge ? 'Edged it! Run!' : 'Run!');
+    }
+  },
   nextBall(){
-    this.flash = ''; this.fall = this.fly = this.hit = this.swing = this.press = this.ball = null; this.swung = false;
-    if (this.legal >= this.BALLS){ this.done(); return; }
-    if (this.legal === this.OVER) this.tell('last', 'Last over!');
-    if (this.mode === 'bat') this.bowlAt();
+    this.flash = ''; this.clear();
+    const chase = this.target && this.mode === 'bat';
+    if (chase && this.runs >= this.target){ this.done(); return; }
+    if (this.legal && this.legal % this.OVER === 0 && this.sumDone !== this.legal){
+      this.sumDone = this.legal;
+      if (this.askSum(this.legal / this.OVER - 1)) return;
+    }
+    if (this.legal >= this.maxBalls){
+      if (this.kind === 'match' && this.mode === 'bowl'){ this.interval(); return; }
+      if (!chase || this.maxBalls >= this.MAX_BALLS){ this.done(); return; }
+      this.maxBalls += this.OVER;
+      speak(`Keep going! One more over. You need ${this.target - this.runs} more.`);
+    } else if (this.legal && this.legal % this.OVER === 0 && this.lastSaid !== this.legal){
+      this.lastSaid = this.legal;
+      speak(chase ? `You need ${this.target - this.runs} more!` : 'Last over!');
+    }
+    if (this.mode === 'bat' && !this.duo) this.bowlAt();
     else { this.phase = 'pick'; this.t = 0; }
   },
 
-  /* ----- batting: the computer bowls ----- */
+  /* ----- adding up the over ----- */
+  // The over's runs are shown as dots under each ball, so adding them up is counting them.
+  // An over worth more than 20 is too many to count at four, so then it asks how many balls scored.
+  askSum(ov){
+    const balls = this.balls.filter(b => b.over === ov), total = balls.reduce((n, b) => n + b.r, 0);
+    const big = total > 20, ans = big ? balls.filter(b => b.r).length : total;
+    if (!total || (big && ans < 2)) return false;
+    const who = this.mode === 'bat' ? 'you' : 'they';
+    this.sum = { balls, ans, big, opts: options(ans, 40), wrong: [], ok: false, hit: -1 };
+    this.phase = 'sum'; this.t = 0;
+    speak(big ? `End of the over! How many times did ${who} score? Count the balls with numbers on.`
+      : `End of the over! How many runs did ${who} get? Count the dots.`);
+    return true;
+  },
+  sumBtns(){
+    const r = Math.min(this.W * .11, this.H * .055, 46), n = this.sum.opts.length;
+    return this.sum.opts.map((_, i) => ({ x: this.W * (.5 + (i - (n - 1) / 2) * .26), y: this.H * .7, r }));
+  },
+  sumDown(x, y){
+    const s = this.sum; if (!s || s.ok) return;
+    const i = this.sumBtns().findIndex(b => Math.hypot(x - b.x, y - b.y) < b.r * 1.15);
+    if (i < 0 || s.wrong.includes(i)) return;
+    if (s.opts[i] === s.ans){ s.ok = true; s.hit = i; this.t = 0; ping(); cheer(); speak(`Yes! ${s.ans}!`); }
+    else { s.wrong.push(i); speak('Nearly! Count them again.'); }
+  },
+
+  /* ----- the match: bowl first, then chase ----- */
+  bestBat(){ const b = this.runs > S.batBest; if (b){ S.batBest = this.runs; save(); } return b; },
+  bestBowl(){ const b = this.wkts > S.bowlBest; if (b){ S.bowlBest = this.wkts; save(); } return b; },
+  interval(){
+    this.bestBowl();
+    this.theirs = this.runs; this.target = this.runs + 1;
+    this.phase = 'interval'; this.t = 0;
+    speak(`They scored ${this.theirs}. You need ${this.target} to win! Your turn to bat.`);
+  },
+  startChase(){ this.mode = 'bat'; this.innings(); this.phase = 'result'; this.t = 0; this.wait = .6; },
+
+  /* ----- batting ----- */
+  // The computer bowls: mostly at the stumps, some outside off and leg, the odd wide, spin from
+  // the third ball, and a little quicker every ball.
   bowlAt(){
     const n = this.legal, spin = n >= 2 && Math.random() < .3, r = Math.random();
-    const ue = r < .55 ? pick([-.08, 0, .1]) : r < .77 ? .45 : r < .92 || this.last === 'wide' ? -.42 : pick([-1, 1]) * 1.25;
-    this.last = Math.abs(ue) > 1 ? 'wide' : '';
-    const T = (1.75 - n * .045) * (spin ? 1.18 : 1), u0 = .28;
+    const ue = r < .55 ? pick([-.08, 0, .1]) : r < .77 ? .45 : r < .92 || this.lastWide ? -.42 : pick([-1, 1]) * 1.25;
+    this.lastWide = Math.abs(ue) > 1;
+    const T = (1.75 - Math.min(n, 11) * .045) * (spin ? 1.18 : 1), u0 = .28;
     const db = spin ? .62 + Math.random() * .1 : .55 + Math.random() * .15;
     const ub = spin && Math.abs(ue) < 1 ? ue + pick([-1, 1]) * .32 : u0 + (ue - u0) * db;
     this.ball = this.make(u0, ue, ub, db, T, spin);
@@ -4311,13 +4438,13 @@ const Cricket = {
   },
   updBat(dt){
     const b = this.ball;
-    if (this.phase === 'runup'){ if (this.t >= this.RUN){ this.phase = 'ball'; this.t = 0; } return; }
+    if (this.phase === 'runup' && !this.duo){ if (this.t >= this.RUN){ this.phase = 'ball'; this.t = 0; } return; }
     if (this.phase === 'ball'){
       if (this.hit){ if (!this.hit.gone && this.clock - this.hit.at > .22) this.launch((Math.random() - .5) * .5, false); return; }
       const was = b.d; b.d += dt / b.T;
       if (was < 1 && b.d >= 1 && Math.abs(b.ue) < this.STUMP){ this.bowled(); return; }
       if (b.d >= 1.25){
-        if (Math.abs(b.ue) > 1){ this.runs++; this.result('Wide!', '#fff', 1.6, 'Wide! A free run for you.'); }
+        if (Math.abs(b.ue) > 1){ this.wide(); this.result('Wide!', '#fff', 1.6, 'Wide! A free run for you.'); }
         else { this.dot('•'); this.swung ? this.result('Missed!', '#fff', 1.5, 'Missed it! Watch the ball.') : this.result('Well left!', '#fff', 1.5, 'Well left!'); }
       }
       return;
@@ -4332,7 +4459,7 @@ const Cricket = {
   batDown(x, y){
     if (this.phase !== 'ball' || this.hit || (this.swing && this.swing.t < .5)) return;
     this.press = { x, y, done: false };
-    this.swing = { t: 0, dir: 1 }; this.swung = true;
+    this.swing = { t: 0 }; this.swung = true;
     const b = this.ball;
     const u = this.bu(b, b.d), h = this.bh(b, b.d), p = this.P(b.d, u, h);
     const reach = Math.max(this.W * .17, p.s * .8), lo = Math.abs(x - p.x) / reach;
@@ -4342,32 +4469,61 @@ const Cricket = {
     thud();
   },
   // A good swipe is worth more than a tap, and the swipe's direction is where the ball goes.
+  // A half-hit swipe goes up in the air: through a gap it's four, at a fielder it's caught.
   launch(a, swipe){
     const h = this.hit, q = h.q; h.gone = true;
     let runs = swipe ? (q > .62 ? 6 : q > .4 ? 4 : 2) : (q > .55 ? 4 : q > .3 ? 2 : 1);
-    if (q < .2){ runs = 1; a = pick([-1, 1]) * (1.7 + Math.random() * .5); }   // an edge, off behind
+    const edge = q < .2;
+    if (edge){ runs = 1; a = pick([-1, 1]) * (1.7 + Math.random() * .5); }   // off the edge, behind
+    if (swipe && runs === 4 && S.catches){
+      const fs = this.fielders(), i = fs.findIndex(f => Math.abs(f.a - a) < this.CATCH);
+      if (i >= 0){
+        this.flyTo(h.d, h.u, h.h, fs[i].d, fs[i].u, 3, 1.1, true, .9);
+        this.fly.onEnd = () => this.caught(i);
+        this.result('', '#fff', 99, 'In the air!');
+        return;
+      }
+    }
     this.flyFrom(h.d, h.u, h.h, a, runs);
-    this.runs += runs; this.dot(String(runs));
-    const T = this.fly.T;
-    if (runs === 6){ cheer(); confetti(S.team); this.result('SIX!', '#f5c400', T + .8, 'Six! What a hit!'); }
-    else if (runs === 4){ cheer(); this.result('FOUR!', '#f5c400', T + .7, 'Four!'); }
-    else if (q < .2) this.result('1 run', '#fff', T + .6, 'Edged it! One run.');
-    else this.result(runs === 2 ? '2 runs' : '1 run', '#fff', T + .6, runs === 2 ? 'Two runs!' : 'One run!');
+    this.score(runs, edge);
   },
   flyFrom(d, u, h, a, runs){
     const L = {1: 16, 2: 32, 4: 72, 6: 80}[runs];
-    this.fly = { d0: d, u0: u, h0: h, d1: d - Math.cos(a) * L / 20, u1: u + Math.sin(a) * L / 4.3,
-      peak: runs === 6 ? 9 : runs === 4 ? .5 : .15, T: runs === 6 ? 1.7 : runs === 4 ? 1.3 : 1, k: 0, six: runs === 6 };
+    this.flyTo(d, u, h, d - Math.cos(a) * L / 20, u + Math.sin(a) * L / 4.3,
+      runs === 6 ? 9 : runs === 4 ? .5 : .15, runs === 6 ? 1.7 : runs === 4 ? 1.3 : 1, runs === 6, 0);
+  },
+  // `air`: a straight line and a high arc (a six, or a catch, landing at height `hEnd` in the
+  // fielder's hands). Otherwise it runs along the ground, slowing, with small bounces.
+  flyTo(d, u, h, d1, u1, peak, T, air, hEnd){
+    this.fly = { d0: d, u0: u, h0: h, d1, u1, peak, T, air, hEnd, k: 0, d, u, h, onEnd: null };
     this.ball = null;
   },
   stepFly(dt){
     const f = this.fly; f.k = Math.min(1, f.k + dt / f.T);
-    const k = f.k, e = f.six ? k : 1 - (1 - k) * (1 - k);
+    const k = f.k, e = f.air ? k : 1 - (1 - k) * (1 - k);
     f.d = f.d0 + (f.d1 - f.d0) * e; f.u = f.u0 + (f.u1 - f.u0) * e;
-    f.h = f.six ? f.h0 * (1 - k) + 4 * f.peak * k * (1 - k) : f.h0 * (1 - k) + Math.abs(Math.sin(k * Math.PI * 2)) * f.peak * (1 - k);
+    f.h = f.air ? f.h0 * (1 - k) + f.hEnd * k + 4 * f.peak * k * (1 - k) : f.h0 * (1 - k) + Math.abs(Math.sin(k * Math.PI * 2)) * f.peak * (1 - k);
+    if (k >= 1 && f.onEnd){ const cb = f.onEnd; f.onEnd = null; cb(); }
+  },
+  stepDash(dt){
+    const r = this.dash; r.t += dt;
+    while (r.said < r.n && r.t >= (r.said + 1) * this.RUNT){ r.said++; speak(['One!', 'Two!', 'Three!'][r.said - 1]); }
+  },
+  // Where the two batters are: at their ends, or running between them.
+  batters(){
+    const bat = this.mode === 'bat', E1 = bat ? 1 : .97, E0 = .08, N0 = .02, N1 = .94, r = this.dash;
+    let sd = E1, nd = N0, run = null;
+    if (r){
+      const k = Math.min(r.n, r.t / this.RUNT), j = Math.min(Math.floor(k), r.n - 1), p = Math.min(1, k - j);
+      const out = j % 2 === 0;
+      sd = out ? E1 + (E0 - E1) * p : E0 + (E1 - E0) * p;
+      nd = out ? N0 + (N1 - N0) * p : N1 + (N0 - N1) * p;
+      if (k < r.n) run = r.t * 14;
+    }
+    return { sd, su: bat ? -.55 : -.5, nd, nu: bat ? -.45 : -.85, run };
   },
 
-  /* ----- bowling: the computer bats ----- */
+  /* ----- bowling ----- */
   picks(){
     const r = Math.min(this.W * .14, this.H * .075);
     return [{ x: this.W * .3, y: this.H * .87, r }, { x: this.W * .7, y: this.H * .87, r }];
@@ -4375,34 +4531,40 @@ const Cricket = {
   gaugeP(){ return this.type === 'fast' ? 1.3 : 1.7; },
   gaugeM(){ return (1 - Math.cos(this.t * Math.PI * 2 / this.gaugeP())) / 2; },   // the needle, 0..1, from the left
   gaugeQ(){ return 1 - Math.abs(this.gaugeM() - .5) * 2; },
+  // Whoever bowls - the child at the computer, or the grown-up at the child - runs in the same way.
+  runup(dt){
+    const fast = this.type === 'fast';
+    if (fast) this.pace = Math.max(0, this.pace - .28 * dt);
+    this.prog += (fast ? .14 + .7 * this.pace : .75) * dt;
+    this.stride += dt * (fast ? 6 + 10 * this.pace : 7);
+    if (this.prog >= 1){
+      this.prog = 1; this.phase = 'release'; this.t = 0;
+      this.pace0 = fast ? Math.max(.2, this.pace) : .3;
+      if (!this.duo) this.tell('swipe', 'Swipe to bowl, when the needle is in the green! Left, middle or right.');
+    }
+  },
   updBowl(dt){
     const ph = this.phase, b = this.ball;
-    if (ph === 'runup'){
-      const fast = this.type === 'fast';
-      if (fast) this.pace = Math.max(0, this.pace - .28 * dt);
-      this.prog += (fast ? .14 + .7 * this.pace : .75) * dt;
-      this.stride += dt * (fast ? 6 + 10 * this.pace : 7);
-      if (this.prog >= 1){
-        this.prog = 1; this.phase = 'release'; this.t = 0;
-        this.pace0 = fast ? Math.max(.2, this.pace) : .3;
-        this.tell('swipe', 'Swipe to bowl, when the needle is in the green! Left, middle or right.');
-      }
-    } else if (ph === 'ball'){
+    if (ph === 'ball'){
       const was = b.d; b.d += dt / b.T;
-      if (!this.swing && b.d >= .84 && b.plan !== 'wide' && b.plan !== 'leave') this.swing = { t: 0, dir: pick([-1, 1]) };
+      if (!this.swing && b.d >= .84 && b.plan !== 'wide' && b.plan !== 'leave') this.swing = { t: 0 };
       if (b.plan === 'hit' && b.d >= this.HIT){
-        const runs = pick([1, 1, 1, 2, 2, 4, 4, 6]);
-        this.flyFrom(b.d, this.bu(b, b.d), this.bh(b, b.d), (Math.random() * 2 - 1) * 1.1, runs);
-        this.runs += runs; this.dot(String(runs));
-        const T = this.fly.T;
-        if (runs === 6) this.result('6', '#fff', T + .7, 'Six! A big hit.');
-        else if (runs === 4) this.result('4', '#fff', T + .6, 'Four to them.');
-        else this.result(runs === 2 ? '2 runs' : '1 run', '#fff', T + .5, runs === 2 ? 'Two runs.' : 'One run.');
+        // In a match they hit harder, so the target is worth chasing.
+        const runs = pick(this.kind === 'match' ? [1, 2, 2, 4, 4, 4, 6, 6] : [1, 1, 1, 2, 2, 4, 4, 6]), u = this.bu(b, b.d), h = this.bh(b, b.d);
+        if (runs === 4 && S.catches && Math.random() < .35){     // skied to mid-off or mid-on
+          const i = pick([2, 3]), f = this.fielders()[i];
+          this.flyTo(b.d, u, h, f.d, f.u, 2.5, 1.2, true, .9);
+          this.fly.onEnd = () => this.caught(i);
+          this.result('', '#fff', 99, 'In the air!');
+          return;
+        }
+        this.flyFrom(b.d, u, h, (Math.random() * 2 - 1) * 1.1, runs);
+        this.score(runs, false);
         return;
       }
       if (was < 1 && b.d >= 1 && b.plan === 'bowled'){ this.bowled(); return; }
       if (b.d >= 1.3){
-        if (b.plan === 'wide'){ this.runs++; this.result('Wide!', '#fff', 1.6, 'Wide! Bowl it again.'); }
+        if (b.plan === 'wide'){ this.wide(); this.result('Wide!', '#fff', 1.6, 'Wide! Bowl it again.'); }
         else if (b.plan === 'caught'){ this.wkts++; this.dot('W'); cheer(); confetti(S.team); this.result('Caught!', '#f5c400', 2.2, 'Caught behind! Out!'); }
         else { this.dot('•'); b.plan === 'leave' ? this.result('Dot ball!', '#fff', 1.6, 'Left alone. Dot ball!') : this.result('Beaten!', '#fff', 1.6, 'Beat the bat! Great ball!'); }
       }
@@ -4412,43 +4574,52 @@ const Cricket = {
     }
   },
   // Line from the swipe; how far it strays from the timing. Fast: the faster the run-up the
-  // harder to hit. Spin: aim to the side and it turns in. The batter gets wise to the same
-  // ball twice running (`last`), so mixing it up is rewarded.
+  // harder to hit. Spin: aim to the side and it turns in. When the child bats (two players),
+  // the ball is just bowled and he has to hit it; when the computer bats, it decides up
+  // front (`plan`), and gets wise to the same ball twice running (`lastKey`).
   release(dx, q){
-    const side = Math.abs(dx) > .35 ? Math.sign(dx) : 0, fast = this.type === 'fast', pace = this.pace0, u0 = .3;
+    if (this.phase !== 'release') return;
+    const side = Math.abs(dx) > .35 ? Math.sign(dx) : 0, fast = this.type === 'fast', pace = this.pace0;
+    const u0 = this.mode === 'bat' ? .28 : .3;
     let ue = side * .5 + (1 - q) * .85 * (Math.random() * 2 - 1), ub, db, T;
     if (fast){
       if (q < .3 && Math.random() < .5) ue = (ue < 0 ? -1 : 1) * 1.3;
-      db = .6 - pace * .08 + (Math.random() - .5) * .08; T = 1.55 - pace * .65; ub = u0 + (ue - u0) * db;
+      db = .6 - pace * .08 + (Math.random() - .5) * .08; ub = u0 + (ue - u0) * db;
+      T = this.duo ? 1.75 - pace * .55 : 1.55 - pace * .65;    // a grown-up's fastest is still hittable
     } else {
       db = .66; T = 1.9; ub = ue;
       if (Math.abs(ue) > .05) ue -= Math.sign(ue) * Math.min(Math.abs(ue), .38);
     }
-    const key = this.type + side, wide = Math.abs(ue) > 1.05, on = Math.abs(ue) < this.STUMP;
+    this.ball = this.make(u0, ue, ub, db, T, !fast);
+    this.phase = 'ball'; this.t = 0;
+    if (this.mode === 'bat') return;
+    const key = this.type + side, on = Math.abs(ue) < this.STUMP;
     let plan;
-    if (wide) plan = 'wide';
+    if (Math.abs(ue) > 1.05) plan = 'wide';
     else {
       let p = fast ? .9 - .45 * pace - .2 * q : .62 - .25 * q;
-      if (key === this.last) p += .15;
+      if (key === this.lastKey) p += .15;
       if (!on) p += .1;
+      if (this.kind === 'match') p += this.runs < 30 ? .12 : -.25;   // they hit harder, but tire past 30: the target stays catchable
       p = this.cl(p, .15, .85);
       plan = Math.random() < p ? 'hit' : on ? 'bowled' : fast && pace > .55 && Math.random() < .35 ? 'caught' : Math.random() < .5 ? 'leave' : 'beaten';
     }
-    this.last = key;
-    this.ball = this.make(u0, ue, ub, db, T, !fast); this.ball.plan = plan;
-    this.phase = 'ball'; this.t = 0;
+    this.lastKey = key; this.ball.plan = plan;
   },
 
   done(){
     this.phase = 'over';
     const r = this.runs, w = this.wkts;
-    if (this.mode === 'bat'){
-      const best = r > S.batBest;
-      if (best){ S.batBest = r; save(); }
+    if (this.kind === 'match'){
+      this.bestBat();
+      if (r >= this.target){ confetti(S.team); Mini.finish('You won!', `You needed ${this.target} and got ${r}!`, `You won! You needed ${this.target} and you got ${r}!`); }
+      else if (r === this.target - 1) Mini.finish('A tie!', `${r} each. What a match!`);
+      else Mini.finish('What a match!', `They got ${this.theirs}, you got ${r}. So close!`);
+    } else if (this.mode === 'bat'){
+      const best = this.bestBat();
       Mini.finish(`${r} ${r === 1 ? 'run' : 'runs'}!`, `${w ? `${r} for ${w}.` : 'Not out!'} ${best ? 'A new best score!' : `Your best is ${S.batBest}.`}`);
     } else {
-      const best = w > S.bowlBest;
-      if (best){ S.bowlBest = w; save(); }
+      const best = this.bestBowl();
       Mini.finish(w ? `${w} ${w === 1 ? 'wicket' : 'wickets'}!` : 'Great bowling!',
         `They scored ${r}. ${best ? 'A new best!' : S.bowlBest ? `Your best is ${S.bowlBest} ${S.bowlBest === 1 ? 'wicket' : 'wickets'}.` : ''}`);
     }
@@ -4456,8 +4627,13 @@ const Cricket = {
 
   /* ----- drawing ----- */
   cards(){
-    const W = this.W, H = this.H, w = Math.min(W * .36, H * .24), h = w * 1.15, y = H * .56;
-    return [{ mode: 'bat', x: W / 2 - w - W * .03, y, w, h }, { mode: 'bowl', x: W / 2 + W * .03, y, w, h }];
+    const W = this.W, H = this.H, w = Math.min(W * .33, H * .19), h = w * .95, gap = Math.min(16, W * .04);
+    const y0 = Math.min(H * .5, H - (2 * h + gap + 80)), xs = [W / 2 - w - gap / 2, W / 2 + gap / 2];
+    return [['bat', 0, 0], ['bowl', 1, 0], ['match', 0, 1], ['duo', 1, 1]].map(([kind, c, r]) => ({ kind, x: xs[c], y: y0 + r * (h + gap), w, h }));
+  },
+  pill(){
+    const c = this.cards()[3], w = Math.min(this.W * .6, 240), h = 44;
+    return { x: this.W / 2 - w / 2, y: c.y + c.h + 16, w, h };
   },
   field(){
     const g = this.g, W = this.W, H = this.H, hz = this.hz, Kh = this.Kh;
@@ -4496,24 +4672,26 @@ const Cricket = {
       g.beginPath(); g.moveTo(x - Math.cos(a) * .05 * s, y - Math.sin(a) * .05 * s); g.lineTo(x + Math.cos(a) * .05 * s, y + Math.sin(a) * .05 * s); g.stroke();
     });
   },
-  // A cricketer, feet at (d, u). `o`: bat (swing 0..1), arm ('run', 'up', 'down'), run (stride),
-  // helmet, crouch, gloves. Kits are colours only, like everywhere else.
+  // A cricketer, feet at (d, u). `o`: bat (swing 0..1), arm ('run', 'up', 'down'), cheer (both
+  // arms up), run (stride), holding (the ball), helmet, crouch, gloves. Kits are colours only.
   person(d, u, team, o){
-    const g = this.g, p = this.P(d, u, 0), s = p.s * 1.2 * this.big(d) * (o.crouch ? .8 : 1), x = p.x, y = p.y;
     if (this.z(d) < .16) return;
+    const g = this.g, p = this.P(d, u, 0), s = p.s * 1.2 * this.big(d) * (o.crouch ? .8 : 1), x = p.x, y = p.y;
     const sw = o.run != null ? Math.sin(o.run) * .14 : 0;
     g.lineCap = 'round';
     g.strokeStyle = '#f6f5ee'; g.lineWidth = s * (o.helmet ? .17 : .12);
     g.beginPath(); g.moveTo(x - .08 * s, y - .58 * s); g.lineTo(x - .1 * s + sw * s, y - .04 * s);
     g.moveTo(x + .08 * s, y - .58 * s); g.lineTo(x + .1 * s - sw * s, y - .04 * s); g.stroke();
     g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1; g.stroke();
-    const sh = { x: x + .17 * s, y: y - .98 * s };
-    if (o.arm){
+    g.strokeStyle = '#f1c79b'; g.lineWidth = s * .08;
+    if (o.cheer){
+      g.beginPath(); g.moveTo(x - .17 * s, y - .98 * s); g.lineTo(x - .3 * s, y - 1.6 * s);
+      g.moveTo(x + .17 * s, y - .98 * s); g.lineTo(x + .3 * s, y - 1.6 * s); g.stroke();
+    } else if (o.arm){
       const hand = o.arm === 'up' ? { x: x + .2 * s, y: y - 1.62 * s }
         : o.arm === 'down' ? { x: x + .32 * s, y: y - .5 * s }
         : { x: x + .25 * s + Math.sin(o.run || 0) * .12 * s, y: y - .62 * s };
-      g.strokeStyle = '#f1c79b'; g.lineWidth = s * .08;
-      g.beginPath(); g.moveTo(sh.x, sh.y); g.lineTo(hand.x, hand.y); g.stroke();
+      g.beginPath(); g.moveTo(x + .17 * s, y - .98 * s); g.lineTo(hand.x, hand.y); g.stroke();
       if (o.holding) this.ballDot(hand.x, hand.y - s * .04, Math.max(3, s * .07));
     }
     drawShirt(g, team, x, y - .82 * s, .62 * s);
@@ -4521,12 +4699,12 @@ const Cricket = {
     g.fillStyle = '#f1c79b'; g.beginPath(); g.arc(x, hy, hr, 0, Math.PI * 2); g.fill();
     g.fillStyle = o.helmet ? '#1d2a4a' : '#4a3020';
     g.beginPath(); g.arc(x, hy - hr * .1, hr * (o.helmet ? 1.18 : 1.02), Math.PI, 0); g.fill();
-    if (o.helmet){ g.fillRect(x - hr * 1.3, hy - hr * .2, hr * 2.6, hr * .22); }
+    if (o.helmet) g.fillRect(x - hr * 1.3, hy - hr * .2, hr * 2.6, hr * .22);
     if (o.gloves){ g.fillStyle = '#f6f5ee'; [-1, 1].forEach(k => { g.beginPath(); g.arc(x + k * .22 * s, y - .6 * s, .08 * s, 0, Math.PI * 2); g.fill(); }); }
-    if (o.bat != null) this.bat(x, y, s, o.side || 1, o.bat);
+    if (o.bat != null) this.bat(x, y, s, o.bat);
   },
-  bat(x, y, s, side, sw){
-    const g = this.g, hx = x + side * .16 * s, hy = y - .66 * s, a = side * (.45 - sw * 3.1), L = .64 * s;
+  bat(x, y, s, sw){
+    const g = this.g, hx = x + .16 * s, hy = y - .66 * s, a = .45 - sw * 3.1, L = .64 * s;
     const tx = hx + Math.sin(a) * L, ty = hy + Math.cos(a) * L, mx = hx + (tx - hx) * .32, my = hy + (ty - hy) * .32;
     g.lineCap = 'round';
     g.strokeStyle = '#3a2a1a'; g.lineWidth = s * .05; g.beginPath(); g.moveTo(hx, hy); g.lineTo(mx, my); g.stroke();
@@ -4536,6 +4714,12 @@ const Cricket = {
   swingAmt(){
     const w = this.swing; if (!w) return 0;
     return w.t < .16 ? w.t / .16 : w.t < .6 ? 1 : Math.max(0, 1 - (w.t - .6) / .3);
+  },
+  // Dark text on a light button, without the outline Mini.text gives white text on the grass.
+  ink(txt, x, y, size, colour){
+    const g = this.g;
+    g.fillStyle = colour; g.font = `800 ${size}px "Baloo 2","Trebuchet MS",sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y);
   },
   ballDot(x, y, r){
     const g = this.g;
@@ -4561,15 +4745,24 @@ const Cricket = {
     g.fillStyle = `rgba(245,196,0,${lit ? .32 : .12})`;
     g.beginPath(); c.forEach(p => g.lineTo(p.x, p.y)); g.closePath(); g.fill();
   },
+  // The score, and a dot per ball of the two overs on show. At the top, or at the bottom when the
+  // grown-up's controls are up there.
   hud(){
-    const W = this.W, H = this.H, bw = Math.min(W * .42, 190), bh = Math.min(H * .065, 54), y0 = H * .015;
-    Mini.rect(W / 2 - bw / 2, y0, bw, bh, 16, 'rgba(18,48,26,.85)');
-    Mini.text(`${this.runs}/${this.wkts}`, W / 2, y0 + bh / 2 + 2, bh * .7);
-    const gap = Math.min(28, W * .068), r = gap * .42, y = y0 + bh + r + 6;
+    const W = this.W, H = this.H, bw = Math.min(W * .42, 190), bh = Math.min(H * .065, 54), low = this.duo;
+    const gap = Math.min(28, W * .068), r = gap * .42;
+    const by = low ? H * .985 - bh : H * .015, dy = low ? by - r - 6 : by + bh + r + 6;
+    Mini.rect(W / 2 - bw / 2, by, bw, bh, 16, 'rgba(18,48,26,.85)');
+    Mini.text(`${this.runs}/${this.wkts}`, W / 2, by + bh / 2 + 2, bh * .7);
+    if (this.target && this.mode === 'bat'){
+      const need = Math.max(0, this.target - this.runs), pw = Math.min(W * .22, 96), px = Math.min(W - pw - 6, W / 2 + bw / 2 + 8);
+      Mini.rect(px, by + bh * .15, pw, bh * .7, 12, '#f5c400');
+      this.ink(need ? `Need ${need}` : 'Won!', px + pw / 2, by + bh / 2 + 1, bh * .36, '#12301a');
+    }
+    const base = this.maxBalls - this.BALLS;
     for (let i = 0; i < this.BALLS; i++){
-      const m = this.log[i], x = W / 2 + (i - 5.5) * gap + (i < this.OVER ? -gap * .4 : gap * .4);
-      Mini.dot(x, y, r, m === 'W' ? '#e63946' : m === '4' || m === '6' ? '#f5c400' : m ? 'rgba(255,255,255,.55)' : 'rgba(18,48,26,.35)', 'rgba(255,255,255,.7)');
-      if (m && m !== '•') Mini.text(m, x, y + 1, r * 1.25);
+      const m = this.log[base + i], x = W / 2 + (i - 5.5) * gap + (i < this.OVER ? -gap * .4 : gap * .4);
+      Mini.dot(x, dy, r, m === 'W' ? '#e63946' : m === '4' || m === '6' ? '#f5c400' : m ? 'rgba(255,255,255,.55)' : 'rgba(18,48,26,.35)', 'rgba(255,255,255,.7)');
+      if (m && m !== '•') Mini.text(m, x, dy + 1, r * 1.25);
     }
   },
   gauge(){
@@ -4583,74 +4776,114 @@ const Cricket = {
     g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R * 1.12, cy + Math.sin(a) * R * 1.12); g.stroke();
     Mini.dot(cx, cy, 8, '#fff');
   },
-  // Three arrows on the pitch while the needle swings: you can swipe left, middle or right.
+  // Three arrows on the pitch while the needle swings, pointing the way the ball will go:
+  // you can swipe left, middle or right.
   arrows(){
-    const g = this.g;
+    const g = this.g, dn = this.mode === 'bat' ? 1 : -1;
     [-.55, 0, .55].forEach(u => {
       const p = this.P(.55, u, 0), s = p.s * .22;
       g.fillStyle = 'rgba(255,255,255,.55)';
-      g.beginPath(); g.moveTo(p.x + u * s * 1.2, p.y - s); g.lineTo(p.x - s * .8, p.y + s * .5); g.lineTo(p.x + s * .8, p.y + s * .5); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(p.x + u * s * 1.2, p.y + dn * s); g.lineTo(p.x - s * .8, p.y - dn * s * .5); g.lineTo(p.x + s * .8, p.y - dn * s * .5); g.closePath(); g.fill();
     });
   },
-  drawChoose(){
-    const g = this.g, W = this.W, H = this.H, cs = this.cards();
-    Mini.text('Bat or bowl?', W / 2, cs[0].y - H * .06, Math.min(46, W * .11));
-    cs.forEach(c => {
-      Mini.rect(c.x, c.y, c.w, c.h, 22, 'rgba(18,48,26,.85)', '#f5c400', 4);
-      const cx = c.x + c.w / 2, cy = c.y + c.h * .42;
-      if (c.mode === 'bat'){
-        g.font = `${c.w * .5}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-        g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🏏', cx, cy);
-      } else this.ballDot(cx, cy, c.w * .2);
-      Mini.text(c.mode === 'bat' ? 'Batting' : 'Bowling', cx, c.y + c.h * .84, c.w * .17);
-    });
-  },
-  drawPicks(){
-    const g = this.g;
-    this.picks().forEach((b, i) => {
+  // The bowler's buttons, needle and run-up meter, drawn for someone at the bottom of the
+  // screen; when the grown-up bowls, `draw()` turns them round to face the far end.
+  controls(){
+    const W = this.W, H = this.H, ph = this.phase, g = this.g;
+    if (ph === 'pick') this.picks().forEach((b, i) => {
       Mini.dot(b.x, b.y, b.r, i ? '#2f6fe0' : '#e8590c', '#fff');
       g.font = `${b.r * .9}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
       g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(i ? '🌀' : '🔥', b.x, b.y - b.r * .12);
       Mini.text(i ? 'Spin' : 'Fast', b.x, b.y + b.r * 1.35, Math.min(30, b.r * .5));
     });
+    if (ph === 'runup' && this.type === 'fast'){
+      const x = W * (this.duo ? .12 : .88), y0 = H * .5, h = H * .3, w = Math.min(28, W * .07);
+      Mini.rect(x - w / 2, y0, w, h, w / 2, 'rgba(18,48,26,.6)', '#fff', 3);
+      Mini.rect(x - w / 2 + 4, y0 + 4 + (h - 8) * (1 - this.pace), w - 8, (h - 8) * this.pace, (w - 8) / 2, this.pace > .7 ? '#e63946' : '#f5c400');
+      Mini.text('Tap tap tap!', W / 2, H * (this.duo ? .6 : .5), Math.min(40, W * .1), '#f5c400');
+    }
+    if (ph === 'release'){ this.gauge(); Mini.text('Swipe to bowl!', W / 2, H * (this.duo ? .6 : .5), Math.min(40, W * .1), '#f5c400'); }
+  },
+  drawChoose(){
+    const g = this.g, W = this.W, H = this.H, cs = this.cards(), pl = this.pill();
+    Mini.text('Bat or bowl?', W / 2, cs[0].y - H * .06, Math.min(46, W * .11));
+    const label = { bat: 'Batting', bowl: 'Bowling', match: 'Match', duo: '2 players' };
+    cs.forEach(c => {
+      Mini.rect(c.x, c.y, c.w, c.h, 22, 'rgba(18,48,26,.85)', '#f5c400', 4);
+      const cx = c.x + c.w / 2, cy = c.y + c.h * .4;
+      if (c.kind === 'bowl') this.ballDot(cx, cy, c.w * .19);
+      else {
+        g.font = `${c.w * .42}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+        g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+        g.fillText({ bat: '🏏', match: '🏆', duo: '🧑‍🤝‍🧑' }[c.kind], cx, cy);
+      }
+      Mini.text(label[c.kind], cx, c.y + c.h * .83, c.w * .16);
+    });
+    Mini.rect(pl.x, pl.y, pl.w, pl.h, pl.h / 2, S.catches ? 'rgba(245,196,0,.9)' : 'rgba(18,48,26,.7)', '#fff', 3);
+    (S.catches ? this.ink.bind(this) : Mini.text)(S.catches ? 'Catches on' : 'Catches off', W / 2, pl.y + pl.h / 2 + 1, pl.h * .5, S.catches ? '#12301a' : '#fff');
+  },
+  drawSum(){
+    const s = this.sum, W = this.W, H = this.H;
+    Mini.rect(W * .05, H * .2, W * .9, H * .6, 26, 'rgba(18,48,26,.92)', '#f5c400', 4);
+    Mini.text(s.big ? 'How many times?' : 'How many runs?', W / 2, H * .26, Math.min(34, W * .08), '#f5c400');
+    const n = s.balls.length, gap = Math.min(W * .8 / n, 64), r = Math.min(gap * .4, 22);
+    s.balls.forEach((b, i) => {
+      const x = W / 2 + (i - (n - 1) / 2) * gap, y = H * .35, lit = b.r && b.m !== 'W';
+      Mini.dot(x, y, r, b.m === 'W' ? '#e63946' : b.r >= 4 ? '#f5c400' : lit ? '#fff' : 'rgba(255,255,255,.25)', '#fff');
+      (lit ? this.ink.bind(this) : Mini.text)(b.m === '•' ? '0' : b.m, x, y + 1, r * (b.m === 'wd' ? .85 : 1.2), lit ? '#12301a' : '#fff');
+      if (!s.big) for (let k = 0; k < b.r; k++)
+        Mini.dot(x + ((k % 2) - .5) * r * .95, y + r * 1.75 + Math.floor(k / 2) * r * .95, r * .32, '#f5c400');
+    });
+    this.sumBtns().forEach((b, i) => {
+      const wrong = s.wrong.includes(i);
+      Mini.dot(b.x, b.y, b.r, wrong ? 'rgba(255,255,255,.2)' : s.ok && s.hit === i ? '#3cc35a' : '#fff', '#f5c400');
+      this.ink(String(s.opts[i]), b.x, b.y + 2, b.r * 1.1, wrong ? 'rgba(255,255,255,.4)' : '#12301a');
+    });
+  },
+  drawInterval(){
+    const W = this.W, H = this.H;
+    Mini.rect(W * .08, H * .3, W * .84, H * .36, 26, 'rgba(18,48,26,.92)', '#f5c400', 4);
+    Mini.text(`They scored ${this.theirs}`, W / 2, H * .38, Math.min(36, W * .085));
+    Mini.text(`Need ${this.target} to win!`, W / 2, H * .48, Math.min(44, W * .1), '#f5c400');
+    if (this.t > 1.5) Mini.text('Tap to bat', W / 2, H * .59, Math.min(28, W * .068));
   },
   draw(){
-    const W = this.W, H = this.H, ph = this.phase, b = this.ball;
+    const W = this.W, H = this.H, ph = this.phase, b = this.ball, bat = this.mode === 'bat';
     this.field();
     if (ph === 'choose'){ this.drawChoose(); return; }
-    if (this.mode === 'bat'){
-      const inWin = b && ph === 'ball' && b.d >= this.EARLY && b.d <= this.LATE;
-      this.zone(inWin);
-      this.stumps(0);
-      const up = ph === 'runup' ? Math.min(1, this.t / this.RUN) : 1, bd = -.55 * (1 - up);
-      this.person(bd, .42, awayTeam(), { run: ph === 'runup' ? this.t * 14 : null, arm: ph === 'runup' ? (up > .85 ? 'up' : 'run') : 'down', holding: ph === 'runup' });
-      if (b && ((ph === 'runup' && this.t > .45) || (ph === 'ball' && b.d < b.db + .12))) this.marker(b);
-      this.stumps(1);
-      this.person(1, -.55, S.team, { helmet: true, bat: this.swingAmt(), side: 1 });
-      if (b && ph !== 'runup') this.hit && !this.hit.gone ? this.ballAt(this.hit.d, this.hit.u, this.hit.h) : this.ballAt(b.d, this.bu(b, b.d), this.bh(b, b.d));
-      if (inWin && this.legal < 2) Mini.text('Swipe!', W / 2, H * .5, Math.min(54, W * .13), '#f5c400');
-    } else {
-      this.person(1.3, 0, S.team, { crouch: true, gloves: true });     // your keeper, behind their stumps
-      this.stumps(1);
-      this.person(.97, -.5, awayTeam(), { helmet: true, bat: this.swingAmt(), side: 1 });
-      if (ph === 'release') this.arrows();
-      if (b) this.ballAt(b.d, this.bu(b, b.d), this.bh(b, b.d));
-      this.stumps(0);
-      const run = ph === 'runup' || ph === 'pick', bd = -.12 + .12 * (ph === 'pick' ? 0 : this.prog);
-      this.person(bd, .55, S.team, { run: ph === 'runup' ? this.stride : null, arm: ph === 'release' ? 'up' : run ? 'run' : 'down', holding: ph !== 'ball' && ph !== 'result' });
-      if (ph === 'pick') this.drawPicks();
-      if (ph === 'runup' && this.type === 'fast'){
-        const x = W * .88, y0 = H * .5, h = H * .3, w = Math.min(28, W * .07);
-        Mini.rect(x - w / 2, y0, w, h, w / 2, 'rgba(18,48,26,.6)', '#fff', 3);
-        Mini.rect(x - w / 2 + 4, y0 + 4 + (h - 8) * (1 - this.pace), w - 8, (h - 8) * this.pace, (w - 8) / 2, this.pace > .7 ? '#e63946' : '#f5c400');
-        Mini.text('Tap tap tap!', W / 2, H * .5, Math.min(40, W * .1), '#f5c400');
-      }
-      if (ph === 'release'){ this.gauge(); Mini.text('Swipe to bowl!', W / 2, H * .5, Math.min(40, W * .1), '#f5c400'); }
-    }
+    const inWin = bat && b && ph === 'ball' && !this.hit && b.d >= this.EARLY && b.d <= this.LATE;
+    if (bat) this.zone(inWin);
+    if (ph === 'release') this.arrows();
+    if (bat && b && ((ph === 'runup' && this.t > .45) || (ph === 'ball' && b.d < b.db + .12))) this.marker(b);
+    // Everyone and both sets of stumps, furthest first. Stumps sort just behind anyone on their line.
+    const items = [], add = (d, fn, back) => items.push({ z: this.z(d) + (back ? .01 : 0), fn });
+    const field = bat ? awayTeam() : S.team, them = bat ? S.team : awayTeam(), bt = this.batters();
+    add(0, () => this.stumps(0), true); add(1, () => this.stumps(1), true);
+    this.fielders().forEach((f, i) => add(f.d, () => this.person(f.d, f.u, field, { cheer: this.catcher === i })));
+    add(1.3, () => this.person(1.3, 0, field, { crouch: true, gloves: true }));                 // the keeper
+    add(bt.sd, () => this.person(bt.sd, bt.su, them, { helmet: true, bat: this.dash ? 0 : this.swingAmt(), run: bt.run }));
+    add(bt.nd, () => this.person(bt.nd, bt.nu, them, { helmet: true, bat: 0, run: bt.run }));
+    // The bowler: running in, arm up to bowl, then following through.
+    const person = bat && !this.duo;
+    const prog = person ? (ph === 'runup' ? Math.min(1, this.t / this.RUN) : 1) : ph === 'pick' ? 0 : ph === 'runup' ? this.prog : 1;
+    const bd = bat ? -.55 * (1 - prog) : -.12 + .12 * prog, bu = bat ? .42 : .55;
+    const arm = person ? (ph === 'runup' ? (prog > .85 ? 'up' : 'run') : 'down')
+      : ph === 'release' ? 'up' : ph === 'runup' || ph === 'pick' ? 'run' : 'down';
+    const holding = person ? ph === 'runup' : ph === 'pick' || ph === 'runup' || ph === 'release';
+    const stride = ph === 'runup' ? (person ? this.t * 14 : this.stride) : null;
+    add(bd, () => this.person(bd, bu, field, { run: stride, arm, holding }));
+    items.sort((a, b) => b.z - a.z).forEach(it => it.fn());
+    if (b && ph !== 'runup' && ph !== 'pick' && ph !== 'release')
+      this.hit && !this.hit.gone ? this.ballAt(this.hit.d, this.hit.u, this.hit.h) : this.ballAt(b.d, this.bu(b, b.d), this.bh(b, b.d));
     const f = this.fly;
     if (f) this.ballAt(f.d, f.u, f.h);
+    if (inWin && this.legal < 2) Mini.text('Swipe!', W / 2, H * .5, Math.min(54, W * .13), '#f5c400');
+    if (this.duo) Mini.flip(() => this.controls());
+    else if (!bat) this.controls();
     this.hud();
     if (this.flash) Mini.text(this.flash, W / 2, H * .44, Math.min(72, W * .17), this.flashCol);
+    if (ph === 'sum') this.drawSum();
+    if (ph === 'interval') this.drawInterval();
   }
 };
 
