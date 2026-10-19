@@ -635,11 +635,12 @@ const S = {
   keepyBest: saved.keepyBest || 0,
   batBest: saved.batBest || 0,
   bowlBest: saved.bowlBest || 0,
+  tenpinBest: saved.tenpinBest || 0,
   catches: saved.catches !== false,
   srKnow: saved.srKnow && typeof saved.srKnow === 'object' ? saved.srKnow : {},
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,catches:S.catches,srKnow:S.srKnow})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,tenpinBest:S.tenpinBest,catches:S.catches,srKnow:S.srKnow})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // Club names label the kits, but the kits themselves are still colours only - no crests,
@@ -1422,7 +1423,8 @@ const PRIZE_GAMES = [
   {key:'sprint',   ico:'🏃', name:'Sprint race', go: after => Mini.start(Sprint, after, 'sprint')},
   {key:'pairs',    ico:'👕', name:'Kit pairs',  go: after => Mini.start(Pairs, after, 'pairs')},
   {key:'rocket',   ico:'🚀', name:'Rocket trip', go: after => Mini.start(Rocket, after, 'rocket')},
-  {key:'cricket',  ico:'🏏', name:'Cricket',    go: after => Mini.start(Cricket, after, 'cricket')}
+  {key:'cricket',  ico:'🏏', name:'Cricket',    go: after => Mini.start(Cricket, after, 'cricket')},
+  {key:'tenpin',   ico:'🎳', name:'Bowling',    go: after => Mini.start(Tenpin, after, 'tenpin')}
 ];
 let pickerAfter = null, pickerSpend = true, pickerBack = null;
 // Used both on the picker screen and inline on the prize screen, so a won prize is one tap from playing.
@@ -4923,6 +4925,563 @@ const Cricket = {
     if (this.flash) Mini.text(this.flash, W / 2, H * .44, Math.min(72, W * .17), this.flashCol);
     if (ph === 'sum') this.drawSum();
     if (ph === 'interval') this.drawInterval();
+  }
+};
+
+/* ---------- prize game: ten-pin bowling ---------- */
+// Asked for by the child. It plays like bowling in the cricket game: tap tap tap to run up (the
+// faster the run-up, the faster the ball), then a needle swings and the Roll button rolls the
+// ball wherever it points. Five frames of two balls, or three frames each for two players,
+// taking turns. The child always has bumpers, so his ball can't go in the gutter; the grown-up
+// doesn't, which is the handicap. The score is just the pins knocked down (strike and spare
+// bonuses are too much to follow at four), and before his second ball he counts the pins
+// still standing. Like every prize game it can't be lost: every end screen cheers.
+// The lane is in metres, the real sizes: y runs from the foul line (0) to the head pin (LANE)
+// and on to the back of the pin deck, x is across (the lane is ±HALF), h is height. `P()` turns
+// those into the screen, from a camera behind the bowler that follows the ball to the pins.
+// The pins are knocked about by a small 2-D physics model (`step()`): circles that collide,
+// slide and stop, and a standing pin hit hard enough falls over.
+const Tenpin = {
+  title: 'Bowling', intro: 'Knock all the pins down!',
+  sky: true,
+  FRAMES: 5, DUO_FRAMES: 3,
+  LANE: 18.29, HALF: .527, GUTTER: .76, WALL: .95, DECK: 19.16,   // head pin, lane edge, gutter edge, kickbacks, back of the deck
+  BALL_R: .109, PIN_R: .06, PIN_L: .38, ROW: .264, GAP: .305,     // the rack: rows ROW apart, pins GAP apart in a row
+  MB: 4.3,                 // the ball's mass, a pin's being 1
+  FALL_V: 1.6,             // a standing pin knocked faster than this (m/s) falls over; slower, it wobbles and stays up
+  MIX: .25,                // a little sideways scatter on every knock, so the pins don't fall the same way every time
+  FR: 4,                   // how fast a sliding pin slows down (m/s²)
+  BUMP_E: .1,              // how much of its sideways speed the ball keeps off a bumper
+  Z0: 8.3, CAM_MAX: 11,    // the camera's distance behind the foul line, and how far down the lane it follows the ball
+  DEPTH: .6,               // the lane is drawn shorter than it is, or the pins are specks on a phone
+  LOCK: .35,               // seconds after the run-up when the Roll button doesn't answer yet (as in the cricket)
+  // A pin's outline: [fraction of the way up, radius in metres].
+  PROF: [[0, .026], [.1, .048], [.22, .059], [.32, .06], [.45, .052], [.56, .036], [.64, .024], [.71, .023], [.8, .03], [.9, .029], [.96, .02], [1, 0]],
+  setup(W, H){
+    this.g = Mini.ctx(); this.lay(W, H);
+    this.phase = 'choose'; this.duo = false; this.asked = false; this.t = 0; this.clock = 0; this.told = {};
+    this.cam = 0; this.who = 0; this.fr = 0; this.ballNo = 1; this.scores = [[], []];
+    this.flash = ''; this.flashCol = '#fff'; this.sum = null; this.ball = null; this.then = null; this.zs = null;
+    this.prog = 0; this.pace = 0; this.pace0 = 0; this.stride = 0;
+    this.rack(); this.before = this.pins.slice();
+  },
+  lay(W, H){
+    this.W = W; this.H = H;
+    const zn = this.Z0, zf = this.Z0 + this.LANE * this.DEPTH, yNear = H * .86, yFar = H * .27;
+    this.Kh = (yNear - yFar) / (1 / zn - 1 / zf);
+    this.hz = yNear - this.Kh / zn;
+    this.Ku = Math.min(W, H * .62) * .36 * zn / this.HALF;   // the lane is 72% of the screen across at the foul line
+  },
+  resize(W, H){ this.lay(W, H); },
+  z(y){ return this.Z0 + (y - this.cam) * this.DEPTH; },
+  P(y, x, h){
+    const z = Math.max(.3, this.z(y)), s = this.Ku / z;
+    return { x: this.W / 2 + x * s, y: this.hz + this.Kh / z - (h || 0) * s, s };
+  },
+  cl(v, a, b){ return Math.min(Math.max(v, a), b); },
+  tell(key, line){ if (this.told[key]) return; this.told[key] = true; speak(line); },
+  rack(){
+    this.pins = [];
+    for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++)
+      this.pins.push({ row: r, col: i, x: (i - r / 2) * this.GAP, y: this.LANE + r * this.ROW, vx: 0, vy: 0, h: 0, vh: 0,
+        up: true, fall: 0, dir: 0, wob: 0, wdir: 0, gone: false, fade: 1 });
+  },
+  standing(){ return this.pins.filter(p => p.up && !p.gone); },
+  bumpers(){ return !(this.duo && this.who); },     // the child always has them; the grown-up never does
+  team(){ return this.who ? awayTeam() : S.team; },
+  frames(){ return this.duo ? this.DUO_FRAMES : this.FRAMES; },
+
+  /* ----- input ----- */
+  down(x, y){
+    const ph = this.phase;
+    if (ph === 'choose') return this.chooseDown(x, y);
+    if (ph === 'count') return this.countDown(x, y);
+    if (ph !== 'runup' && ph !== 'aim') return;
+    if (!this.duo) return this.bowlerDown(x, y);
+    // Two players: each bowls from their own half. On the grown-up's go the whole picture is turned
+    // round to face them (`draw()`), so their touches are turned round too.
+    if (this.who){ if (y < this.H * .5) this.bowlerDown(this.W - x, this.H - y); }
+    else if (y > this.H * .5) this.bowlerDown(x, y);
+  },
+  bowlerDown(x, y){
+    if (this.phase === 'runup'){ this.pace = Math.min(1, this.pace + .13); return; }
+    const bb = this.rollBtn();
+    if (this.t < this.LOCK || Math.hypot(x - bb.x, y - bb.y) > bb.r * 1.35) return;
+    this.release(this.gaugeM());
+  },
+  cards(){
+    const W = this.W, H = this.H, w = Math.min(W * .38, H * .22), h = w * 1.05, gap = Math.min(18, W * .045);
+    return [['solo', W / 2 - w - gap / 2], ['duo', W / 2 + gap / 2]].map(([kind, x]) => ({ kind, x, y: H * .5, w, h }));
+  },
+  chooseDown(x, y){
+    const c = this.cards().find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+    if (!c) return;
+    this.duo = c.kind === 'duo'; ping();
+    speak(this.duo ? 'Two players! You go first, then the grown-up. Tap tap tap to run up!' : 'Tap tap tap to run up, then roll the ball!');
+    this.startBall(true);
+  },
+
+  /* ----- flow ----- */
+  startBall(quiet){
+    this.phase = 'runup'; this.t = 0; this.prog = 0; this.pace = 0; this.stride = 0;
+    this.ball = null; this.flash = ''; this.crash = false; this.zs = null;
+    this.before = this.standing();
+    if (quiet || this.ballNo === 2) return;
+    if (this.duo) speak(this.who ? 'Grown-up\'s turn!' : 'Your turn! Tap tap tap!');
+    else if (this.fr === this.frames() - 1) speak('Last go! Tap tap tap!');
+  },
+  update(dt){
+    this.clock += dt; this.t += dt;
+    const ph = this.phase, b = this.ball;
+    if (ph === 'choose'){ if (!this.asked && this.t > .3){ this.asked = true; speak('One player or two?'); } return; }
+    if (ph === 'runup') this.runup(dt);
+    if (ph === 'roll' || ph === 'result') this.step(dt);
+    if (ph === 'roll'){
+      if (!b.gone) this.cam += (this.cl(b.y - 5, 0, this.CAM_MAX) - this.cam) * Math.min(1, dt * 8);
+      else if (b.goneAt == null) b.goneAt = this.clock;
+      else if ((this.clock - b.goneAt > .8 && this.settled()) || this.clock - b.goneAt > 2.6) this.scoreBall();
+    } else if (ph === 'result'){
+      if (this.t > this.wait){ const f = this.then; this.then = null; f && f(); }
+    } else if (ph === 'count'){
+      if (this.sum.ok && this.t > 1.8) this.sweep(false, () => { this.ballNo = 2; this.startBall(); });
+    } else if (ph === 'reset'){
+      // The camera comes back up the lane while the fallen pins are swept away.
+      this.cam = Math.max(0, this.cam - dt * 18);
+      this.pins.forEach(p => { if (this.sweepAll || !p.up) p.fade = Math.max(0, p.fade - dt * 2.5); });
+      if (this.t > .8 && !this.cam){
+        this.pins.forEach(p => { if (!p.up) p.gone = true; p.vx = p.vy = p.h = p.vh = p.wob = 0; });
+        const f = this.after; this.after = null; f();
+      }
+    }
+  },
+  runup(dt){
+    this.pace = Math.max(0, this.pace - .28 * dt);
+    this.prog += (.14 + .7 * this.pace) * dt;
+    this.stride += dt * (6 + 10 * this.pace);
+    if (this.prog >= 1){
+      this.prog = 1; this.phase = 'aim'; this.t = 0; this.pace0 = Math.max(.2, this.pace);
+      this.zs = this.zones();
+      if (this.duo && this.who) return;
+      this.tell('aim', 'Press roll when the needle is on the green! The needle points where the ball goes.');
+      if (this.ballNo === 2) this.tell('spare', 'Green is where the pins are!');
+    }
+  },
+  // The faster the run-up, the faster the ball: 2.7 seconds down the lane at a walk, 1.7 flat out.
+  release(m){
+    if (this.phase !== 'aim') return;
+    this.ball = this.newBall(this.aimLine(m), this.LANE / (3 - 1.3 * this.pace0));
+    this.phase = 'roll'; this.t = 0;
+  },
+  newBall(xt, v){
+    const a = Math.atan2(xt, this.LANE);
+    return { x: 0, y: 0, vx: v * Math.sin(a), vy: v * Math.cos(a), roll: 0, gutter: false, gone: false, bumped: false, goneAt: null };
+  },
+  result(text, col, wait, line, then){
+    this.phase = 'result'; this.t = 0; this.wait = wait; this.then = then;
+    this.flash = text; this.flashCol = col || '#fff';
+    if (line) speak(line);
+  },
+  scoreBall(){
+    const n = this.before.filter(p => !p.up).length, left = this.standing().length, me = !this.who;
+    (this.scores[this.who][this.fr] = this.scores[this.who][this.fr] || []).push(n);
+    if (!left){
+      const strike = this.ballNo === 1;
+      cheer(); confetti(this.team());
+      this.result(strike ? 'STRIKE!' : 'SPARE!', '#f5c400', 2.6,
+        strike ? (me ? 'Strike! You knocked them all down!' : 'A strike for the grown-up!') : (me ? 'Spare! All gone!' : 'A spare for the grown-up!'),
+        () => this.endFrame());
+      return;
+    }
+    const line = n ? `${n} ${n === 1 ? 'pin' : 'pins'}!` : this.ball.gutter ? 'Gutter ball!' : 'Missed!';
+    if (me && n >= 5) cheer();
+    this.result(line, '#fff', 1.8, n ? line : me ? `${line} Never mind!` : `${line} Oh dear, grown-up!`, () => {
+      if (this.ballNo === 2) return this.endFrame();
+      if (me) return this.askCount();
+      this.sweep(false, () => { this.ballNo = 2; this.startBall(); });
+    });
+  },
+  endFrame(){
+    if (this.duo && !this.who) this.who = 1;
+    else { this.who = 0; this.fr++; }
+    this.ballNo = 1;
+    if (this.fr >= this.frames()) return this.done();
+    this.sweep(true, () => { this.rack(); this.startBall(); });
+  },
+  // Clears the fallen pins (or all of them, for a new frame) while the camera comes back.
+  sweep(all, after){ this.phase = 'reset'; this.t = 0; this.sweepAll = all; this.after = after; this.ball = null; this.flash = ''; },
+  total(who){ return this.scores[who].reduce((n, f) => n + f.reduce((a, b) => a + b, 0), 0); },
+  done(){
+    this.phase = 'over'; this.flash = '';
+    const a = this.total(0), b = this.total(1), strikes = this.scores[0].filter(f => f[0] === 10).length;
+    if (this.duo){
+      if (a > b){ confetti(S.team); Mini.finish('You won!', `${a} pins to ${b}!`, `You won! ${a} pins to ${b}!`); }
+      else if (a === b) Mini.finish('A tie!', `${a} pins each. What a game!`);
+      else Mini.finish('What a game!', `You got ${a}, the grown-up got ${b}.`);
+      return;
+    }
+    const best = a > S.tenpinBest;
+    if (best){ S.tenpinBest = a; save(); }
+    Mini.finish(`${a} pins!`, `${strikes ? `${strikes} ${strikes === 1 ? 'strike' : 'strikes'}! ` : ''}${best ? 'A new best score!' : `Your best is ${S.tenpinBest}.`}`);
+  },
+
+  /* ----- counting the pins left ----- */
+  askCount(){
+    const ans = this.standing().length;
+    this.sum = { ans, opts: options(ans, 10), wrong: [], ok: false, hit: -1 };
+    this.phase = 'count'; this.t = 0; this.flash = '';
+    speak('How many pins are still standing? Count the white ones.');
+  },
+  countBtns(){
+    const r = Math.min(this.W * .11, this.H * .055, 46), n = this.sum.opts.length;
+    return this.sum.opts.map((_, i) => ({ x: this.W * (.5 + (i - (n - 1) / 2) * .26), y: this.H * .8, r }));
+  },
+  countDown(x, y){
+    const s = this.sum; if (!s || s.ok) return;
+    const i = this.countBtns().findIndex(b => Math.hypot(x - b.x, y - b.y) < b.r * 1.15);
+    if (i < 0 || s.wrong.includes(i)) return;
+    if (s.opts[i] === s.ans){
+      s.ok = true; s.hit = i; this.t = 0; ping(); cheer();
+      speak(`Yes! ${s.ans} ${s.ans === 1 ? 'pin' : 'pins'} left. Knock ${s.ans === 1 ? 'it' : 'them'} down!`);
+    } else { s.wrong.push(i); speak('Nearly! Count the white ones again.'); }
+  },
+
+  /* ----- aiming ----- */
+  rollBtn(){ return { x: this.W / 2, y: this.H * .935, r: Math.min(this.W * .12, this.H * .06) }; },
+  // The needle sweeps steadily from side to side (0 = its left end, 1 = its right).
+  gaugeM(){ const x = (this.t / 2) % 1; return 1 - Math.abs(2 * x - 1); },
+  // Where the ball is heading at the head pin's row, for a needle at m: past the lane at the very
+  // ends (off a bumper, or into the gutter), across it through the yellow, and at the head pin
+  // through the green middle, which is stretched so it's easier to stop on.
+  aimLine(m){
+    const l = (a, b, f) => a + (b - a) * f;
+    return m < .12 ? l(-1.3, -.7, m / .12) : m < .38 ? l(-.48, -.12, (m - .12) / .26)
+      : m < .62 ? l(-.1, .1, (m - .38) / .24) : m < .88 ? l(.12, .48, (m - .62) / .26) : l(.7, 1.3, (m - .88) / .12);
+  },
+  // Where a ball aimed at xt goes, bumpers and gutters and all (no pins), for the dotted aim line.
+  track(xt){
+    const b = this.newBall(xt, 10), pts = [[b.x, b.y]];
+    for (let k = 1; !b.gone && k < 400; k++){ this.moveBall(b, .01); if (k % 6 === 0 || b.gone) pts.push([b.x, b.y]); }
+    return { pts, gutter: b.gutter };
+  },
+  hits(xt){
+    const { pts, gutter } = this.track(xt), st = this.standing(), rr = this.BALL_R + this.PIN_R - .01;
+    // How near the ball's path (a line from point to point) passes each pin.
+    const near = (p, [x1, y1], [x2, y2]) => {
+      const dx = x2 - x1, dy = y2 - y1, k = this.cl(((p.x - x1) * dx + (p.y - y1) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      return Math.hypot(x1 + dx * k - p.x, y1 + dy * k - p.y);
+    };
+    return !gutter && st.some(p => pts.some((q, i) => i && near(p, pts[i - 1], q) < rr));
+  },
+  // The gauge's colours: red at the ends (the bumper, or the gutter). For a full rack green is
+  // the middle; for the second ball it's wherever the needle would send the ball into a pin.
+  zones(){
+    const R = '#e63946', Y = '#f5c400', G = '#3cc35a';
+    if (this.ballNo === 1) return [[0, .12, R], [.12, .38, Y], [.38, .62, G], [.62, .88, Y], [.88, 1, R]];
+    const out = [];
+    for (let i = 0, N = 80; i < N; i++){
+      const m = (i + .5) / N, c = m < .12 || m > .88 ? R : this.hits(this.aimLine(m)) ? G : Y, last = out[out.length - 1];
+      if (last && last[2] === c) last[1] = (i + 1) / N; else out.push([i / N, (i + 1) / N, c]);
+    }
+    return out;
+  },
+
+  /* ----- the ball and the pins ----- */
+  moveBall(b, h){
+    b.x += b.vx * h; b.y += b.vy * h; b.roll += Math.hypot(b.vx, b.vy) * h / this.BALL_R;
+    if (b.gutter){ const gx = Math.sign(b.x) * (this.HALF + this.GUTTER) / 2; b.x += (gx - b.x) * Math.min(1, h * 12); b.vx = 0; }
+    else if (this.bumpers()){
+      const lim = this.HALF - this.BALL_R;
+      if (Math.abs(b.x) > lim){ b.x = Math.sign(b.x) * lim; b.vx = -b.vx * this.BUMP_E; b.bumped = true; }
+    } else if (Math.abs(b.x) > this.HALF) b.gutter = true;
+    if (b.y > this.DECK + .3) b.gone = true;
+  },
+  step(dt){
+    const n = 8, h = dt / n, b = this.ball, ps = this.pins;
+    for (let k = 0; k < n; k++){
+      if (b && !b.gone){
+        const was = b.bumped; this.moveBall(b, h);
+        if (b.bumped && !was) thud();
+        if (!b.gutter) ps.forEach(p => { if (!p.gone) this.collide(b, this.MB, this.BALL_R, p); });
+      }
+      ps.forEach(p => this.movePin(p, h));
+      for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++){
+        const a = ps[i], c = ps[j];
+        if (!a.gone && !c.gone && (!a.up || !c.up)) this.collide(a, 1, this.pr(a), c);
+      }
+    }
+  },
+  pr(p){ return p.up ? this.PIN_R : .09; },   // a pin going over sweeps a wider patch than a standing one
+  // Body a (the ball, or a pin) hits pin p: a bouncy collision along the line between them.
+  collide(a, ma, ra, p){
+    const dx = p.x - a.x, dy = p.y - a.y, rr = ra + this.pr(p), d = Math.hypot(dx, dy);
+    if (d >= rr || d < 1e-6) return;
+    const nx = dx / d, ny = dy / d, im = 1 / ma + 1, o = rr - d;
+    a.x -= nx * o / ma / im; a.y -= ny * o / ma / im; p.x += nx * o / im; p.y += ny * o / im;
+    const rel = (a.vx - p.vx) * nx + (a.vy - p.vy) * ny;
+    if (rel <= 0) return;
+    const j = 1.7 * rel / im, kick = (Math.random() * 2 - 1) * this.MIX * j;
+    a.vx -= j * nx / ma; a.vy -= j * ny / ma;
+    p.vx += j * nx - ny * kick; p.vy += j * ny + nx * kick;
+    this.struck(p, j);
+    if (a !== this.ball) this.struck(a, j);
+  },
+  struck(p, dv){
+    if (!p.up) return;
+    if (dv > this.FALL_V){
+      p.up = false; p.dir = Math.atan2(p.vx, p.vy); p.vh = Math.min(2.2, Math.hypot(p.vx, p.vy) * .3);
+      if (!this.crash){ this.crash = true; thud(); this.clatter(); }
+    } else { p.vx = p.vy = 0; p.wob = Math.min(1, p.wob + .3 + dv / this.FALL_V); p.wdir = Math.random() * 6.28; }
+  },
+  movePin(p, h){
+    if (p.gone) return;
+    if (!p.up) p.fall = Math.min(1, p.fall + h * 4.5);
+    p.wob = Math.max(0, p.wob - h * 1.5);
+    const v = Math.hypot(p.vx, p.vy);
+    if (v > 0){ const k = Math.max(0, v - this.FR * h) / v; p.vx *= k; p.vy *= k; p.x += p.vx * h; p.y += p.vy * h; }
+    if (p.h > 0 || p.vh > 0){ p.h += p.vh * h; p.vh -= 9.8 * h; if (p.h <= 0){ p.h = 0; p.vh = p.vh < -.6 ? -p.vh * .3 : 0; } }
+    if (Math.abs(p.x) > this.WALL){ p.x = Math.sign(p.x) * this.WALL; p.vx = -p.vx * .5; }   // off the kickbacks, back among the pins
+    if (p.y > this.DECK){ p.gone = true; p.up = false; }                                   // into the pit
+  },
+  settled(){ return this.pins.every(p => p.gone || Math.hypot(p.vx, p.vy) < .05); },
+  // The crash of the pins: a burst of rattly noise.
+  clatter(){
+    const c = audio(); if (!c) return;
+    try {
+      const len = .7, buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3) * (Math.random() < .03 ? 3 : 1);
+      const src = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
+      src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = .7; gn.gain.value = .45;
+      src.connect(f).connect(gn).connect(c.destination); src.start(c.currentTime);
+    } catch(e) {}
+  },
+
+  /* ----- drawing ----- */
+  poly(pts, fill){
+    const g = this.g; g.fillStyle = fill; g.beginPath(); pts.forEach(p => g.lineTo(p.x, p.y)); g.closePath(); g.fill();
+  },
+  // A patch of floor from y0 to y1 and x0 to x1.
+  quad(y0, x0, y1, x1, fill){ this.poly([this.P(y0, x0), this.P(y0, x1), this.P(y1, x1), this.P(y1, x0)], fill); },
+  alley(){
+    const g = this.g, W = this.W, H = this.H, L = this.LANE, D = this.DECK, HF = this.HALF, GU = this.GUTTER, WL = this.WALL;
+    const y0 = this.cam - (this.Z0 - .45) / this.DEPTH, yl = Math.max(y0, 0);       // the nearest floor in front of the camera
+    const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#141033'); bg.addColorStop(1, '#2a2350');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    this.quad(y0, -4, D, 4, '#3b3360');                                // the floor beside the lane
+    [-1, 1].forEach(k => {
+      this.quad(y0, k * HF, D, k * GU, '#5a5a66');                     // the gutters
+      this.quad(y0, k * (HF + GU) / 2 - k * .03, D, k * (HF + GU) / 2 + k * .03, '#45454f');
+      this.poly([this.P(L - .9, k * WL), this.P(D, k * WL), this.P(D, k * WL, .95), this.P(L - .9, k * WL, .95)], '#231d47');   // the kickbacks
+    });
+    this.poly([this.P(D, -WL), this.P(D, WL), this.P(D, WL, .95), this.P(D, -WL, .95)], '#07050d');   // the pit, under the masking
+    if (y0 < 0) this.quad(y0, -HF - .35, 0, HF + .35, '#efd3a0');      // the approach
+    this.quad(yl, -HF, D, HF, '#e2b676');                              // the lane
+    this.quad(L - .3, -HF, D, HF, '#ecc68c');                          // the pin deck, a little paler
+    g.lineWidth = 1;
+    for (let k = 1; k < 39; k++){                                      // the boards
+      const x = -HF + k * 2 * HF / 39, a = this.P(yl, x), b = this.P(D, x);
+      g.strokeStyle = k % 5 ? 'rgba(120,70,20,.12)' : 'rgba(120,70,20,.25)';
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    }
+    if (y0 < 0) this.quad(-.03, -HF - .35, .03, HF + .35, '#3a2a1a');  // the foul line
+    for (let i = 0; i < 7; i++){                                       // the aiming arrows, every five boards
+      const x = -HF + (5 + 5 * i) * 2 * HF / 39, tip = 4.3 + (3 - Math.abs(i - 3)) * .3;
+      if (tip - .5 > y0) this.poly([this.P(tip, x), this.P(tip - .5, x - .04), this.P(tip - .5, x + .04)], '#7a4a1c');
+    }
+    for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++){           // the pin spots
+      const p = this.P(L + r * this.ROW, (i - r / 2) * this.GAP);
+      g.fillStyle = 'rgba(140,90,40,.35)'; g.beginPath(); g.ellipse(p.x, p.y, p.s * .03, p.s * .012, 0, 0, Math.PI * 2); g.fill();
+    }
+    if (this.bumpers()) [-1, 1].forEach(k => {                         // the bumpers: soft tubes along the gutters
+      this.quad(yl, k * (HF + .01), D, k * (GU - .02), '#2f6fe0');
+      this.quad(yl, k * (HF + .07), D, k * (HF + .12), 'rgba(170,205,255,.75)');
+    });
+    // The masking unit over the pins, with a row of coloured lights.
+    const mb = this.P(D, 0, .95).y, mg = g.createLinearGradient(0, 0, 0, mb);
+    mg.addColorStop(0, '#221a5c'); mg.addColorStop(1, '#3d2e94');
+    g.fillStyle = mg; g.fillRect(0, 0, W, mb);
+    const cols = ['#e63946', '#f5c400', '#3cc35a', '#2f9be0', '#c86bfa'], n = Math.ceil(W / 26);
+    for (let i = 0; i < n; i++)
+      Mini.dot(i * 26 + 13, mb - 7, 4, cols[(i + Math.floor(this.clock * 3)) % cols.length]);
+  },
+  rad(t){
+    const pf = this.PROF, i = pf.findIndex(q => q[0] >= t);
+    if (i <= 0) return pf[Math.max(0, i)][1];
+    const [t0, r0] = pf[i - 1], [t1, r1] = pf[i];
+    return r0 + (r1 - r0) * (t - t0) / (t1 - t0);
+  },
+  // A pin standing up, wobbling or falling over: its outline is drawn along the line from its
+  // base to its top, both put through P(), so it leans and lies the right way from any angle.
+  drawPin(p){
+    if (this.z(p.y) < .8 || p.fade <= 0) return;
+    const g = this.g, L = this.PIN_L;
+    const a = p.up ? Math.sin(this.clock * 28) * .14 * p.wob : p.fall * Math.PI / 2, dir = p.up ? p.wdir : p.dir;
+    const B = this.P(p.y, p.x, p.h), s = B.s;
+    const T = this.P(p.y + Math.cos(dir) * Math.sin(a) * L, p.x + Math.sin(dir) * Math.sin(a) * L, p.h + Math.cos(a) * L);
+    const ax = T.x - B.x, ay = T.y - B.y, len = Math.hypot(ax, ay) || 1, nx = -ay / len, ny = ax / len;
+    const at = (t, k) => [B.x + ax * t + nx * this.rad(t) * s * k, B.y + ay * t + ny * this.rad(t) * s * k];
+    g.globalAlpha = p.fade;
+    if (p.up){ g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(B.x, B.y, s * .06, s * .022, 0, 0, Math.PI * 2); g.fill(); }
+    const left = this.PROF.map(([t]) => at(t, 1)), right = this.PROF.map(([t]) => at(t, -1)).reverse();
+    g.beginPath(); [...left, ...right].forEach(([x, y]) => g.lineTo(x, y)); g.closePath();
+    g.fillStyle = '#fbfaf5'; g.fill(); g.strokeStyle = 'rgba(90,80,70,.55)'; g.lineWidth = 1; g.stroke();
+    g.beginPath(); [...this.PROF.map(([t]) => at(t, 0)), ...right].forEach(([x, y]) => g.lineTo(x, y)); g.closePath();
+    g.fillStyle = 'rgba(60,50,80,.1)'; g.fill();                       // a little shade down one side
+    g.strokeStyle = '#d0202f'; g.lineWidth = Math.max(1.2, s * .013);  // two red stripes round the neck
+    [.6, .67].forEach(t => { const [x1, y1] = at(t, 1), [x2, y2] = at(t, -1); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); });
+    g.globalAlpha = 1;
+  },
+  // A bowling ball in a kit's colour, with its finger holes rolling over the top.
+  orb(x, y, r, team, roll){
+    const g = this.g, gd = g.createRadialGradient(x - r * .35, y - r * .4, r * .05, x, y, r);
+    gd.addColorStop(0, 'rgba(255,255,255,.95)'); gd.addColorStop(.3, TEAMS[team].main); gd.addColorStop(1, TEAMS[team].main);
+    g.fillStyle = gd; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    const rim = g.createRadialGradient(x, y, r * .6, x, y, r);
+    rim.addColorStop(0, 'rgba(0,0,0,0)'); rim.addColorStop(1, 'rgba(0,0,0,.4)');
+    g.fillStyle = rim; g.fill();
+    [[-.2, 0], [.2, 0], [0, -.8]].forEach(([dx, dp]) => {
+      const q = 1.2 - roll + dp, c = Math.sin(q);                       // c > 0: on the side facing us
+      if (c < .15) return;
+      g.fillStyle = 'rgba(20,16,30,.8)';
+      g.beginPath(); g.ellipse(x + dx * r, y - Math.cos(q) * r * .8, r * .12, r * .12 * c, 0, 0, Math.PI * 2); g.fill();
+    });
+  },
+  drawBall(b){
+    if (this.z(b.y) < .8) return;
+    const g = this.g, c = this.P(b.y, b.x, this.BALL_R - (b.gutter ? .07 : 0)), gr = this.P(b.y, b.x, 0), r = this.BALL_R * c.s;
+    g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(gr.x, gr.y, r, r * .3, 0, 0, Math.PI * 2); g.fill();
+    this.orb(c.x, c.y, r, this.team(), b.roll);
+  },
+  // The bowler, seen from behind: walking up on the run-up, swinging back to aim, then following
+  // through. Drawn at a little under life size, or they'd fill the screen this close to the camera.
+  bowler(){
+    const ph = this.phase;
+    if (ph !== 'runup' && ph !== 'aim' && ph !== 'roll') return;
+    const by = ph === 'runup' ? -3.2 + 2.85 * this.prog : -.35;
+    if (this.z(by) < 1.5) return;
+    const g = this.g, adult = this.duo && this.who, team = this.team(), p = this.P(by, 0, 0);
+    const ht = (adult ? 1.75 : 1.2) * p.s * .42, x = p.x - ht * .2, y = p.y;
+    const sw = ph === 'runup' ? Math.sin(this.stride) : 0;
+    const arm = ph === 'runup' ? sw * .8 : ph === 'aim' ? -1.25 + Math.sin(this.clock * 3) * .08 : 2.5;   // forward is +
+    g.lineCap = 'round';
+    g.strokeStyle = '#2b2b3a'; g.lineWidth = ht * .1;                  // legs
+    g.beginPath(); g.moveTo(x - ht * .07, y - ht * .46); g.lineTo(x - ht * .09, y - ht * .02 - Math.max(0, sw) * ht * .06);
+    g.moveTo(x + ht * .07, y - ht * .46); g.lineTo(x + ht * .09, y - ht * .02 - Math.max(0, -sw) * ht * .06); g.stroke();
+    g.strokeStyle = '#f1c79b'; g.lineWidth = ht * .07;                 // arms: the left swings against the right
+    const sy = y - ht * .8, la = -arm * .5;
+    g.beginPath(); g.moveTo(x - ht * .19, sy); g.lineTo(x - ht * .25, sy + Math.cos(la) * ht * .34); g.stroke();
+    drawShirt(g, team, x, y - ht * .65, ht * .52);
+    const hand = { x: x + ht * .25, y: sy + Math.cos(arm) * ht * .36 };
+    g.beginPath(); g.moveTo(x + ht * .19, sy); g.lineTo(hand.x, hand.y); g.stroke();
+    g.fillStyle = '#f1c79b'; g.beginPath(); g.arc(x, y - ht * .95, ht * .1, 0, Math.PI * 2); g.fill();   // the back of the head
+    g.fillStyle = adult ? '#2a1d14' : '#4a3020'; g.beginPath(); g.arc(x, y - ht * .965, ht * .1, Math.PI * .9, Math.PI * 2.1); g.fill();
+    if (ph !== 'roll') this.orb(hand.x, hand.y + ht * .02, ht * .09 * (1 + Math.max(0, -Math.sin(arm)) * .25), team, 0);
+  },
+  // While the needle swings, a dotted line on the lane shows where the ball would go now.
+  aimPreview(){
+    const g = this.g, xt = this.aimLine(this.gaugeM()), tr = this.track(xt), pts = tr.pts.map(([x, y]) => this.P(y, x, 0));
+    g.setLineDash([8, 8]); g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 3; g.lineCap = 'butt';
+    g.beginPath(); pts.forEach(p => g.lineTo(p.x, p.y)); g.stroke(); g.setLineDash([]);
+    const end = tr.pts.find(([, y]) => y >= this.LANE) || tr.pts[tr.pts.length - 1], e = this.P(this.LANE, end[0], 0), r = e.s * .2;
+    const m = this.gaugeM(), z = (this.zs || this.zones()).find(([a, b]) => m >= a && m <= b), c = z ? z[2] : '#fff';
+    g.lineWidth = 4; g.strokeStyle = c; g.beginPath(); g.ellipse(e.x, e.y, r, r * .45, 0, 0, Math.PI * 2); g.stroke();
+  },
+  gauge(){
+    const g = this.g, bb = this.rollBtn(), cx = bb.x, cy = bb.y, R = Math.min(this.W * .26, this.H * .12);
+    g.lineWidth = R * .3; g.lineCap = 'butt';
+    (this.zs || this.zones()).forEach(([a, b, c]) => {
+      g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, R, Math.PI + a * Math.PI, Math.PI + b * Math.PI); g.stroke();
+    });
+    const a = Math.PI + this.gaugeM() * Math.PI;
+    g.lineCap = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R * 1.12, cy + Math.sin(a) * R * 1.12); g.stroke();
+    const live = this.t >= this.LOCK;
+    Mini.dot(cx, cy, bb.r, live ? '#e63946' : 'rgba(230,57,70,.45)', '#fff');
+    Mini.text('Roll', cx, cy + 2, bb.r * .55, live ? '#fff' : 'rgba(255,255,255,.5)');
+  },
+  // The bowler's run-up meter and needle.
+  controls(){
+    const W = this.W, H = this.H, ph = this.phase;
+    if (ph === 'runup'){
+      const x = W * .88, y0 = H * .5, h = H * .3, w = Math.min(28, W * .07);
+      Mini.rect(x - w / 2, y0, w, h, w / 2, 'rgba(20,16,51,.6)', '#fff', 3);
+      Mini.rect(x - w / 2 + 4, y0 + 4 + (h - 8) * (1 - this.pace), w - 8, (h - 8) * this.pace, (w - 8) / 2, this.pace > .7 ? '#e63946' : '#f5c400');
+      Mini.text('Tap tap tap!', W / 2, H * .5, Math.min(40, W * .1), '#f5c400');
+    }
+    if (ph === 'aim'){ this.gauge(); Mini.text('Stop on green!', W / 2, H * .5, Math.min(40, W * .1), '#f5c400'); }
+  },
+  // Dark text on a light box, without the outline Mini.text gives white text.
+  ink(txt, x, y, size, colour){
+    const g = this.g;
+    g.fillStyle = colour; g.font = `800 ${size}px "Baloo 2","Trebuchet MS",sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y);
+  },
+  // The scoreboard: a box per frame with each ball's pins (X a strike, / a spare), then the total.
+  // One row, or a row each with their shirt for two players.
+  hud(){
+    const W = this.W, H = this.H, n = this.frames(), rows = this.duo ? 2 : 1, ph = this.phase;
+    const bh = Math.min(H * .055, 44), icon = this.duo ? bh : 0, bw = Math.min(64, (W * .94 - icon) / (n + 1.3)), tw = bw * 1.3;
+    const x0 = W / 2 - (icon + n * bw + tw) / 2, y0 = H * .015;
+    for (let r = 0; r < rows; r++){
+      const y = y0 + r * (bh + 6), sc = this.scores[r];
+      if (this.duo) Mini.shirtAt(r ? awayTeam() : S.team, x0 + icon / 2, y + bh / 2, bh * .95);
+      for (let f = 0; f < n; f++){
+        const x = x0 + icon + f * bw, now = r === this.who && f === this.fr && ph !== 'over', fr = sc[f] || [];
+        Mini.rect(x + 2, y, bw - 4, bh, 10, 'rgba(20,16,51,.85)', now ? '#f5c400' : 'rgba(255,255,255,.5)', now ? 3 : 2);
+        const marks = fr[0] === 10 ? ['X'] : fr.map((v, i) => i && fr[0] + v === 10 ? '/' : v ? String(v) : '-');
+        marks.forEach((m, i) => Mini.text(m, x + bw / 2 + (marks.length === 1 ? 0 : (i - .5) * bw * .4), y + bh / 2 + 2, bh * .5,
+          m === 'X' || m === '/' ? '#f5c400' : '#fff'));
+      }
+      const tx = x0 + icon + n * bw;
+      Mini.rect(tx + 4, y, tw - 4, bh, 10, '#f5c400');
+      this.ink(String(this.total(r)), tx + 2 + tw / 2, y + bh / 2 + 2, bh * .62, '#12301a');
+    }
+  },
+  drawChoose(){
+    const g = this.g, W = this.W, H = this.H, cs = this.cards();
+    Mini.text('One player or two?', W / 2, cs[0].y - H * .06, Math.min(40, W * .095));
+    cs.forEach(c => {
+      Mini.rect(c.x, c.y, c.w, c.h, 22, 'rgba(20,16,51,.88)', '#f5c400', 4);
+      const cx = c.x + c.w / 2;
+      g.font = `${c.w * .4}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+      g.fillText(c.kind === 'duo' ? '🧑‍🤝‍🧑' : '🎳', cx, c.y + c.h * .4);
+      Mini.text(c.kind === 'duo' ? '2 players' : '1 player', cx, c.y + c.h * .83, c.w * .15);
+    });
+  },
+  // The pins seen from above, head pin nearest: the white ones are still standing.
+  drawCount(){
+    const s = this.sum, W = this.W, H = this.H, top = H * (this.duo ? .15 : .1), ph = H * .44;
+    Mini.rect(W * .06, top, W * .88, ph, 26, 'rgba(20,16,51,.93)', '#f5c400', 4);
+    Mini.text('How many standing?', W / 2, top + H * .05, Math.min(32, W * .075), '#f5c400');
+    const r = Math.min(W * .05, H * .028, 22), sp = r * 2.8, base = top + ph - r * 2;
+    this.pins.forEach(p => {
+      const x = W / 2 + (p.col - p.row / 2) * sp, y = base - p.row * sp * .9, up = p.up && !p.gone;
+      Mini.dot(x, y, r, up ? '#fbfaf5' : 'rgba(255,255,255,.1)', up ? '#d0202f' : 'rgba(255,255,255,.3)');
+      if (up) Mini.dot(x, y, r * .45, null, '#d0202f');
+    });
+    this.countBtns().forEach((b, i) => {
+      const wrong = s.wrong.includes(i);
+      Mini.dot(b.x, b.y, b.r, wrong ? 'rgba(255,255,255,.2)' : s.ok && s.hit === i ? '#3cc35a' : '#fff', '#f5c400');
+      this.ink(String(s.opts[i]), b.x, b.y + 2, b.r * 1.1, wrong ? 'rgba(255,255,255,.4)' : '#12301a');
+    });
+  },
+  // On the grown-up's go the whole picture is turned round, so they bowl down the lane just as
+  // the child does, from their side of the table.
+  draw(){ this.duo && this.who ? Mini.flip(() => this.scene()) : this.scene(); },
+  scene(){
+    const W = this.W, H = this.H, ph = this.phase, b = this.ball;
+    this.alley();
+    if (ph === 'choose'){ this.pins.forEach(p => this.drawPin(p)); this.drawChoose(); return; }
+    if (ph === 'aim') this.aimPreview();
+    // The pins and the ball, furthest first, then the bowler, who's always nearest.
+    const items = this.pins.filter(p => !p.gone).map(p => ({ y: p.y, fn: () => this.drawPin(p) }));
+    if (b && !b.gone) items.push({ y: b.y, fn: () => this.drawBall(b) });
+    items.sort((a, c) => c.y - a.y).forEach(it => it.fn());
+    this.bowler();
+    this.controls();
+    this.hud();
+    if (this.flash) Mini.text(this.flash, W / 2, H * .3, Math.min(72, W * .17), this.flashCol);
+    if (ph === 'count') this.drawCount();
   }
 };
 
