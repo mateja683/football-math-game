@@ -463,11 +463,6 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
     <button class="catcard" id="goSrWords"><span class="caticon">🗣️</span><span lang="sr">Reči · Речи</span><small>Words</small></button>
     <button class="catcard" id="goSrNums"><span class="caticon">🔢</span><span lang="sr">Brojevi · Бројеви</span><small>Numbers</small></button>
   </div>
-  <h2 class="label">Numbers up to</h2>
-  <div class="chips" id="srTopChips">
-    <button class="chip" data-top="10" aria-pressed="false">10</button>
-    <button class="chip" data-top="20" aria-pressed="false">20</button>
-  </div>
   <p class="srnote" id="srVoiceNote"></p>
 </main>
 
@@ -641,11 +636,10 @@ const S = {
   batBest: saved.batBest || 0,
   bowlBest: saved.bowlBest || 0,
   catches: saved.catches !== false,
-  srTop: saved.srTop === 20 ? 20 : 10,
   srKnow: saved.srKnow && typeof saved.srKnow === 'object' ? saved.srKnow : {},
   goals: 0, q: null, busy: false, missed: false, lastKey: '', token: 0, locked: false
 };
-function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,catches:S.catches,srTop:S.srTop,srKnow:S.srKnow})); } catch(e) {} }
+function save(){ try { localStorage.setItem('goalmaths', JSON.stringify({team:S.team,away:S.away,allGames:S.allGames,modes:S.modes,voice:S.voice,streak:S.streak,prizes:S.prizes,controls:S.controls,trophies:S.trophies,keepyBest:S.keepyBest,batBest:S.batBest,bowlBest:S.bowlBest,catches:S.catches,srKnow:S.srKnow})); } catch(e) {} }
 function awardTrophy(key){ S.trophies[key] = (S.trophies[key] || 0) + 1; save(); }
 function activeModes(){ return S.allGames ? ALL_MODES : S.modes; }
 // Club names label the kits, but the kits themselves are still colours only - no crests,
@@ -1734,6 +1728,7 @@ function toCyr(lat){
 // easy and familiar ones (football, pets, banana) come first. A car is "kola", as the family says it.
 const SR_WORDS = [
   ['lopta','⚽'], ['gol','🥅'], ['pas','🐶'], ['mačka','🐱'], ['kuća','🏠'], ['kola','🚗'],
+  ['gore','⬆️'], ['dole','⬇️'], ['levo','⬅️'], ['desno','➡️'],
   ['banana','🍌'], ['jabuka','🍎'], ['riba','🐟'], ['ptica','🐦'], ['sunce','☀️'], ['mleko','🥛'],
   ['krava','🐮'], ['konj','🐴'], ['svinja','🐷'], ['ovca','🐑'], ['patka','🦆'], ['žaba','🐸'],
   ['miš','🐭'], ['lav','🦁'], ['medved','🐻'], ['zec','🐰'],
@@ -1741,26 +1736,38 @@ const SR_WORDS = [
   ['grožđe','🍇'], ['jagoda','🍓'],
   ['krevet','🛏️'], ['stolica','🪑'], ['knjiga','📖'], ['ključ','🔑'], ['sat','🕐'],
   ['autobus','🚌'], ['voz','🚆'], ['avion','✈️'], ['brod','🚢'], ['bicikl','🚲'],
-  ['kapa','🧢'], ['majica','👕'], ['cipele','👟'],
+  ['kapa','🧢'], ['majica','👕'], ['cipele','👞'],
   ['mesec','🌙'], ['zvezda','⭐'], ['cvet','🌸'], ['drvo','🌳'], ['kiša','🌧️'], ['sneg','❄️'],
   ['ruka','✋'], ['noga','🦵'], ['oko','👁️'], ['uvo','👂'], ['nos','👃'],
+  ['crvena','🟥'], ['plava','🟦'], ['žuta','🟨'], ['zelena','🟩'], ['narandžasta','🟧'], ['ljubičasta','🟪'], ['crna','⬛'],
   // harder: longer words, more of them in each group, so the pictures they're mixed up with
   // (always from nearby in this list once SR_HARD words are known) are the same kind of thing
   ['slon','🐘'], ['majmun','🐒'], ['tigar','🐯'], ['žirafa','🦒'], ['zebra','🦓'], ['krokodil','🐊'],
-  ['pingvin','🐧'], ['delfin','🐬'], ['kit','🐳'], ['ajkula','🦈'],
+  ['pingvin','🐧'], ['delfin','🐬'], ['kit','🐳'], ['ajkula','🦈'], ['foka','🦭'], ['lignja','🦑'],
+  ['kengur','🦘'], ['koala','🐨'], ['panda','🐼'], ['nosorog','🦏'], ['gorila','🦍'], ['flamingo','🦩'], ['papagaj','🦜'],
   ['kamion','🚚'], ['traktor','🚜'], ['helikopter','🚁'], ['raketa','🚀'],
+  ['motor','🏍️'], ['taksi','🚕'], ['tramvaj','🚋'], ['čamac','🛶'], ['jedrilica','⛵'], ['trotinet','🛴'],
   ['pica','🍕'], ['čokolada','🍫'], ['keks','🍪'], ['limun','🍋'], ['ananas','🍍'], ['lubenica','🍉'],
   ['trešnja','🍒'], ['pomorandža','🍊'],
+  ['breskva','🍑'], ['kivi','🥝'], ['kokos','🥥'], ['borovnica','🫐'],
+  ['pomfrit','🍟'], ['hamburger','🍔'], ['palačinka','🥞'], ['kokice','🍿'], ['lizalica','🍭'], ['sok','🧃'],
   ['šešir','🎩'], ['čarape','🧦'], ['haljina','👗'], ['jakna','🧥'], ['naočare','👓'], ['rukavice','🧤'],
-  ['šal','🧣'], ['čizme','👢'],
+  ['šal','🧣'], ['čizme','👢'], ['pantalone','👖'], ['patike','👟'], ['šorc','🩳'],
   ['duga','🌈'], ['oblak','☁️'], ['vatra','🔥'], ['planina','⛰️'], ['munja','⚡'], ['talas','🌊'],
-  ['zub','🦷'], ['srce','❤️'], ['jezik','👅'], ['usta','👄'], ['beba','👶'], ['baka','👵'], ['deda','👴'],
+  ['led','🧊'], ['vulkan','🌋'], ['kamen','🪨'], ['list','🍁'], ['kaktus','🌵'], ['ruža','🌹'], ['suncokret','🌻'], ['lala','🌷'],
+  ['zub','🦷'], ['srce','❤️'], ['jezik','👅'], ['usta','👄'], ['beba','👶'],
+  ['mama','👩'], ['tata','👨'], ['devojčica','👧'], ['dečak','👦'], ['baka','👵'], ['deda','👴'],
   ['kornjača','🐢'], ['zmija','🐍'], ['veverica','🐿️'], ['jež','🦔'], ['sova','🦉'], ['vuk','🐺'], ['lisica','🦊'],
   ['hobotnica','🐙'], ['rak','🦀'], ['kokoška','🐔'], ['kamila','🐪'], ['zmaj','🐉'],
-  ['leptir','🦋'], ['pčela','🐝'], ['bubamara','🐞'], ['puž','🐌'], ['pauk','🕷️'], ['mrav','🐜'],
+  ['petao','🐓'], ['pile','🐥'], ['ćurka','🦃'], ['koza','🐐'], ['labud','🦢'], ['orao','🦅'], ['paun','🦚'],
+  ['leptir','🦋'], ['pčela','🐝'], ['bubamara','🐞'], ['puž','🐌'], ['pauk','🕷️'], ['mrav','🐜'], ['gusenica','🐛'],
   ['šargarepa','🥕'], ['krompir','🥔'], ['paradajz','🍅'], ['kukuruz','🌽'], ['krastavac','🥒'], ['pečurka','🍄'], ['med','🍯'],
   ['olovka','✏️'], ['makaze','✂️'], ['kišobran','☂️'], ['balon','🎈'], ['poklon','🎁'], ['sijalica','💡'],
-  ['ogledalo','🪞'], ['vrata','🚪'], ['prozor','🪟'], ['pehar','🏆'], ['telefon','📱']
+  ['ogledalo','🪞'], ['vrata','🚪'], ['prozor','🪟'], ['pehar','🏆'], ['medalja','🏅'], ['telefon','📱'],
+  ['kada','🛁'], ['tuš','🚿'], ['sapun','🧼'], ['četkica','🪥'], ['metla','🧹'], ['korpa','🧺'], ['kauč','🛋️'], ['televizor','📺'],
+  ['kašika','🥄'], ['viljuška','🍴'], ['flašica','🍼'],
+  ['gitara','🎸'], ['bubanj','🥁'], ['truba','🎺'], ['violina','🎻'], ['klavir','🎹'],
+  ['medvedić','🧸'], ['kocka','🎲'], ['slagalica','🧩']
 ].map(([lat, e]) => ({ key: lat, lat, cyr: toCyr(lat), e }));
 const SR_NUMS = ['jedan','dva','tri','četiri','pet','šest','sedam','osam','devet','deset',
   'jedanaest','dvanaest','trinaest','četrnaest','petnaest','šesnaest','sedamnaest','osamnaest','devetnaest','dvadeset']
@@ -1779,12 +1786,11 @@ function srSpeak(it){
   if (!it || !v || !S.voice) return;
   try { const u = new SpeechSynthesisUtterance(it.cyr); u.lang = v.lang; u.voice = v; u.rate = .8; speechSynthesis.speak(u); } catch(e) {}
 }
-const srPool = () => SB.kind === 'words' ? SR_WORDS : SR_NUMS.slice(0, S.srTop);
+const srPool = () => SB.kind === 'words' ? SR_WORDS : SR_NUMS;
 const srKnown = it => (S.srKnow[it.key] || 0) >= SR_LEARN;
 
 function srMenu(){
   if (S.locked) return;
-  $$('#srTopChips .chip').forEach(c => c.setAttribute('aria-pressed', String(+c.dataset.top === S.srTop)));
   const v = srVoice();
   $('#srVoiceNote').textContent = v
     ? `🔊 This device has a Serbian voice, so the words are spoken too.`
@@ -1879,7 +1885,6 @@ $('#srBack').onclick = () => { hush(); srMenu(); };
 $('#srMenuBack').onclick = () => show('category');
 $('#goSrWords').onclick = () => srStart('words');
 $('#goSrNums').onclick = () => srStart('nums');
-$$('#srTopChips .chip').forEach(c => c.onclick = () => { S.srTop = +c.dataset.top; save(); srMenu(); });
 
 /* ---------- maths: write the answer ---------- */
 // No handwriting recognition, same as the writing game: the grown-up checks the number and taps.
