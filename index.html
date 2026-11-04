@@ -4933,25 +4933,19 @@ const Cricket = {
   }
 };
 
-/* ---------- bowling in 3-D (Three.js) ---------- */
-// A real 3-D picture of the bowling lane, drawn with Three.js on its own canvas (#m3d) under the
-// prize-game canvas. It only draws: the game's flow, its pin physics and every touch stay in
-// `Tenpin`, untouched, and the 2-D canvas still carries the scoreboard, the gauge, the buttons
-// and the words on top. `draw(game)` reads the game's state each frame and poses the scene.
-// Three.js is the app's one outside script, loaded only when Bowling starts. If it can't load (no
-// internet, no WebGL) or the GPU drops the picture, `draw()` says so and Tenpin draws its old
-// 2-D lane instead, so the game always works; `?flat` in the address forces the 2-D one.
-// The camera is the 2-D game's, made real: same place on screen for the foul line and the pins,
-// from 13.8 m back (the 2-D one squashed the lane to fit instead), looking straight ahead with the
-// picture shifted down, so the pins stand upright rather than leaning in. It follows the ball
-// down the lane exactly as before (`game.cam`). Lane coordinates (y down the lane, x across, h up)
-// become Three's as (x, h, -y).
-const Lane3D = (() => {
+/* ---------- 3-D pictures (Three.js), shared by the prize games that have one ---------- */
+// Three.js is the app's one outside script, loaded only when a game with a 3-D picture starts
+// (`G3.load()`). Each such game has a scene module (`Lane3D` for bowling, `Goal3D` for penalties
+// and the crossbar) that only draws: the game's flow, its physics and every touch stay in the
+// game object, untouched, and the 2-D canvas (#mc) still carries the scores, buttons and words
+// on top of the 3-D canvas (#m3d) underneath. A scene's `draw(game)` returns false when there's
+// no 3-D picture (not loaded yet, can't load: offline, no WebGL 2, `?flat` in the address, or the
+// GPU dropped it), and the game then draws its old 2-D picture, so every game always works.
+// One renderer serves every scene; this core also holds what they share: textures painted on
+// 2-D canvases (no image files), the four balls, people, glowing particles and the camera.
+const G3 = (() => {
   const SRC = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
-  const D0 = 13.8, PITCH = 2;          // the camera's distance behind the foul line; lane centre to lane centre
-  let T = null, loading = false, dead = false, R = null, scene, cam, cv, W = 0, H = 0, dpr = 0;
-  let pins = [], ghosts = [], faces = [], ball, ballGhost, blob, bowler, bumpers, dots, ring, lights = [], flipM;
-  let spark, boom, fpx = 1, lastClock = 0, close = 0, shake = 0, party = -9, lastFlash = '', fireworks = [], wasCrash = false;
+  let T = null, loading = false, dead = false, R = null, cv = null, W = 0, H = 0, dpr = 0, flipM = null;
   const tex = {}, kit = {};
 
   function load(){
@@ -4960,8 +4954,61 @@ const Lane3D = (() => {
     loading = true;
     import(SRC).then(m => {
       T = m;
-      try { build(); } catch(e){ dead = true; R = null; }
+      try {
+        cv = $('#m3d');
+        R = new T.WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance' });
+        R.shadowMap.enabled = true; R.shadowMap.type = T.PCFShadowMap;
+        R.toneMapping = T.NeutralToneMapping || T.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
+        cv.addEventListener('webglcontextlost', e => { e.preventDefault(); fail(); });
+        flipM = new T.Matrix4().makeScale(-1, -1, 1);
+        tex.glow = glow(); tex.soft = soft(); tex.star = starTex();
+      } catch(e){ fail(); R = null; }
     }).catch(() => { dead = true; }).finally(() => { loading = false; });
+  }
+  function fail(){ dead = true; if (cv) cv.hidden = true; }
+  // Ready to draw a 3-D frame: shows the canvas and keeps it the size of the screen.
+  function begin(){
+    if (!R || dead){ if (cv) cv.hidden = true; return false; }
+    cv.hidden = false;
+    const w = cv.clientWidth, h = cv.clientHeight, d = Math.min(window.devicePixelRatio || 1, 2);
+    if (w !== W || h !== H || d !== dpr){ W = w; H = h; dpr = d; R.setPixelRatio(d); R.setSize(w, h, false); }
+    return W > 0 && H > 0;
+  }
+  // Builds a scene module's scene the first time it's drawn; a failure there falls back to 2-D.
+  function once(mod){
+    if (mod.built) return true;
+    try { mod.build(); mod.built = true; return true; } catch(e){ fail(); return false; }
+  }
+  // Draws, then clears the 2-D canvas for the game to draw its overlay on.
+  function render(scene, cam){
+    try { R.render(scene, cam); } catch(e){ fail(); return false; }
+    const g = Mini.ctx(); g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height); g.restore();
+    return true;
+  }
+  // A camera looking straight down -z from `pos`, with the picture shifted so the horizon sits at
+  // hz on the screen: f is the focal length in pixels. Looking level keeps uprights upright (pins,
+  // goalposts) where a camera tilted down would lean them in. `flipped` turns it half round for
+  // the grown-up across the table. Returns the scale for particle sizes.
+  function aim(cam, f, hz, x, y, z, flipped, far){
+    const n = .05; far = far || 120;
+    cam.position.set(x, y, z); cam.rotation.set(0, 0, 0); cam.updateMatrixWorld();
+    cam.near = n; cam.far = far;
+    cam.projectionMatrix.makePerspective(-W / 2 / f * n, W / 2 / f * n, hz / f * n, (hz - H) / f * n, n, far);
+    if (flipped) cam.projectionMatrix.premultiply(flipM);
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    return f / (H * .5);
+  }
+  // Shine for glossy things: a simple lit room, blurred into an environment map.
+  function env(scene, wall, lamps, strength){
+    const room = new T.Scene();
+    room.add(new T.Mesh(new T.BoxGeometry(40, 12, 60), new T.MeshBasicMaterial({ color: wall, side: T.BackSide })));
+    for (let i = -2; i <= 2; i++){
+      const lamp = new T.Mesh(new T.PlaneGeometry(1.2, 30), new T.MeshBasicMaterial({ color: new T.Color(lamps, lamps * .93, lamps * .83) }));
+      lamp.rotation.x = Math.PI / 2; lamp.position.set(i * 4, 5.9, 0); room.add(lamp);
+    }
+    const pm = new T.PMREMGenerator(R);
+    scene.environment = pm.fromScene(room, .04).texture; pm.dispose();
+    scene.environmentIntensity = strength;
   }
 
   /* ----- textures, painted on 2-D canvases ----- */
@@ -4974,58 +5021,6 @@ const Lane3D = (() => {
   }
   // Seeded noise, so the wood grain is the same every time.
   function rnd(seed){ let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
-  // Maple boards with grain, 39 to a lane, as on a real one.
-  function boards(g, w, h, base, seed){
-    const r = rnd(seed), bw = w / 39;
-    for (let k = 0; k < 39; k++){
-      const l = 46 + r() * 8;
-      g.fillStyle = `hsl(${32 + r() * 5}, ${48 + r() * 10}%, ${l}%)`;
-      g.fillRect(k * bw, 0, bw + 1, h);
-      for (let n = 0; n < 7; n++){
-        g.strokeStyle = `rgba(110,60,20,${.05 + r() * .08})`; g.lineWidth = .6 + r();
-        const x = k * bw + r() * bw; g.beginPath(); g.moveTo(x, 0);
-        for (let y = 0; y <= h; y += 64) g.lineTo(x + Math.sin(y * .004 + r() * 6) * bw * .15, y);
-        g.stroke();
-      }
-      g.fillStyle = 'rgba(90,50,15,.28)'; g.fillRect(k * bw, 0, 1, h);
-    }
-    g.fillStyle = base; g.fillRect(0, 0, w, h);
-  }
-  function laneTex(G){
-    return paint(512, 4096, (g, w, h) => {
-      const my = y => (1 - y / G.DECK) * h, mx = x => (x + G.HALF) / (2 * G.HALF) * w;
-      boards(g, w, h, 'rgba(255,215,150,.08)', 7);
-      g.fillStyle = 'rgba(255,240,215,.18)'; g.fillRect(0, 0, w, my(G.LANE - .3));       // the pin deck, a little paler
-      g.fillStyle = '#6b3b12';
-      for (let i = 0; i < 7; i++){                                                  // the aiming arrows, every five boards
-        const x = mx(-G.HALF + (5 + 5 * i) * 2 * G.HALF / 39), tip = 4.3 + (3 - Math.abs(i - 3)) * .3;
-        g.beginPath(); g.moveTo(x, my(tip)); g.lineTo(x - 7, my(tip - .5)); g.lineTo(x + 7, my(tip - .5)); g.closePath(); g.fill();
-      }
-      for (let i = 0; i < 5; i++){                                                  // the guide dots
-        const x = mx(-G.HALF + (3 + 8 * i) * 2 * G.HALF / 39);
-        g.beginPath(); g.arc(x, my(2.1), 4, 0, 7); g.fill();
-      }
-      g.fillStyle = 'rgba(120,70,25,.45)';
-      for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++){                      // the pin spots
-        g.beginPath(); g.arc(mx((i - r / 2) * G.GAP), my(G.LANE + r * G.ROW), 8, 0, 7); g.fill();
-      }
-    });
-  }
-  function approachTex(){
-    return paint(512, 512, (g, w, h) => {
-      boards(g, w, h, 'rgba(255,240,210,.22)', 11);
-      g.fillStyle = '#6b3b12';
-      [.45, .8].forEach(f => { for (let i = 0; i < 5; i++){ g.beginPath(); g.arc(w * (.2 + i * .15), h * f, 4, 0, 7); g.fill(); } });
-    });
-  }
-  // A pin: white with two red stripes round the neck. The lathe's v runs up the pin.
-  function pinTex(){
-    return paint(64, 256, (g, w, h) => {
-      g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h);
-      g.fillStyle = '#c8102e'; [[.595, .625], [.65, .68]].forEach(([a, b]) => g.fillRect(0, (1 - b) * h, w, (b - a) * h));
-    });
-  }
-  // A bowling ball in a kit's colours: the main colour swirled with the second one, finger holes.
   function ballTex(team){
     const st = PATTERNED[team], main = st ? st.accent : TEAMS[team].main, sw = st ? st.base : TEAMS[team].trim;
     return paint(512, 256, (g, w, h) => {
@@ -5129,10 +5124,190 @@ const Lane3D = (() => {
       g.fillStyle = gd; g.fillRect(0, 0, w, h);
     });
   }
-
-  /* ----- the scene ----- */
   const std = o => new T.MeshStandardMaterial(o);
   function mesh(geo, mat, x, y, z){ const m = new T.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); return m; }
+
+  /* ----- glowing particles ----- */
+  // A pool of glowing dots: the ball's trail, the sparks off falling pins, the fireworks.
+  function particles(scene, n, size){
+    const g = new T.BufferGeometry(), pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3));
+    const pts = new T.Points(g, new T.PointsMaterial({ size, map: tex.glow, vertexColors: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+    pts.frustumCulled = false; pts.renderOrder = 4; scene.add(pts);
+    return { pts, pos, col, n, size, i: 0, v: new Float32Array(n * 3), base: new Float32Array(n * 3), life: new Float32Array(n), max: new Float32Array(n), grav: new Float32Array(n) };
+  }
+  const tc = () => new T.Color();
+  let cc;
+  function emit(s, x, y, z, vx, vy, vz, life, colour, grav){
+    const i = s.i; s.i = (i + 1) % s.n;
+    cc = cc || tc(); cc.set(colour);
+    s.pos.set([x, y, z], i * 3); s.v.set([vx, vy, vz], i * 3); s.base.set([cc.r, cc.g, cc.b], i * 3);
+    s.life[i] = s.max[i] = life; s.grav[i] = grav || 0;
+  }
+  function burst(s, x, y, z, n, speed, cols, life, grav){
+    for (let k = 0; k < n; k++){
+      const a = Math.random() * 6.283, e = Math.acos(Math.random() * 2 - 1), sp = speed * (.6 + Math.random() * .4);
+      emit(s, x, y, z, Math.sin(e) * Math.cos(a) * sp, Math.cos(e) * sp, Math.sin(e) * Math.sin(a) * sp,
+        life * (.7 + Math.random() * .5), cols[k % cols.length], grav);
+    }
+  }
+  function stepParticles(s, dt, fpx){
+    for (let i = 0; i < s.n; i++){
+      const j = i * 3;
+      if (s.life[i] <= 0){ s.col[j] = s.col[j + 1] = s.col[j + 2] = 0; continue; }
+      s.life[i] -= dt; s.v[j + 1] -= s.grav[i] * dt;
+      s.pos[j] += s.v[j] * dt; s.pos[j + 1] += s.v[j + 1] * dt; s.pos[j + 2] += s.v[j + 2] * dt;
+      const f = Math.max(0, s.life[i] / s.max[i]);
+      s.col[j] = s.base[j] * f; s.col[j + 1] = s.base[j + 1] * f; s.col[j + 2] = s.base[j + 2] * f;
+    }
+    s.pts.geometry.attributes.position.needsUpdate = s.pts.geometry.attributes.color.needsUpdate = true;
+    s.pts.material.size = s.size * fpx;
+  }
+  const RAINBOW = ['#e63946', '#f5c400', '#3cc35a', '#2f9be0', '#c86bfa', '#ff8c1a', '#ffffff'];
+  // A firework going pop.
+  function whizz(){
+    const c = audio(); if (!c) return;
+    try {
+      const o = c.createOscillator(), gn = c.createGain(), t = c.currentTime;
+      o.type = 'triangle'; o.frequency.setValueAtTime(900 + Math.random() * 500, t); o.frequency.exponentialRampToValueAtTime(200, t + .25);
+      gn.gain.setValueAtTime(.12, t); gn.gain.exponentialRampToValueAtTime(.001, t + .3);
+      o.connect(gn).connect(c.destination); o.start(t); o.stop(t + .32);
+    } catch(e) {}
+  }
+
+  /* ----- people ----- */
+  // A footballer (or a bowler) about 1.22 tall, built facing -z: the camera usually sees their
+  // back. `opts.face` gives them eyes and a smile on the front, `opts.gloves` keeper's gloves.
+  // Arms and legs are groups at the shoulder and hip, so rotation.x swings them (+ is forward).
+  function person(opts){
+    opts = opts || {};
+    const skin = std({ color: 0xf1c79b, roughness: .7 }), dark = std({ color: 0x2b2b3a, roughness: .8 });
+    const shoe = std({ color: 0xf4f4f4, roughness: .5 }), hair = std({ color: 0x4a3020, roughness: .9 });
+    const shirt = std({ roughness: .75 }), trim = std({ roughness: .75 });
+    const root = new T.Group(), body = new T.Group(); root.add(body);
+    // A limb hanging from a joint at (x, y): a group to swing, the capsule hanging below it.
+    const limb = (x, y, r, len, m) => {
+      const j = new T.Group(); j.position.set(x, y, 0);
+      const c = mesh(new T.CapsuleGeometry(r, len, 6, 12), m, 0, -len / 2 - r * .5, 0); c.castShadow = true; j.add(c);
+      body.add(j); return j;
+    };
+    const legL = limb(-.075, .5, .055, .38, dark), legR = limb(.075, .5, .055, .38, dark);
+    [legL, legR].forEach(l => l.add(mesh(new T.BoxGeometry(.1, .06, .17), shoe, 0, -.5, -.03)));
+    const shorts = mesh(new T.CylinderGeometry(.15, .16, .14, 18), dark, 0, .52, 0); shorts.scale.z = .65; body.add(shorts);
+    const torsoGeo = new T.CylinderGeometry(.17, .15, .4, 24, 1); torsoGeo.rotateY(Math.PI);   // the pattern's middle at the back
+    const torso = mesh(torsoGeo, shirt, 0, .78, 0); torso.scale.z = .62; torso.castShadow = true; body.add(torso);
+    const collar = mesh(new T.TorusGeometry(.06, .016, 8, 20), trim, 0, .98, 0); collar.rotation.x = Math.PI / 2; body.add(collar);
+    const armL = limb(-.2, .93, .045, .34, skin), armR = limb(.2, .93, .045, .34, skin);
+    [armL, armR].forEach(a => { const s = mesh(new T.CylinderGeometry(.06, .055, .13, 14), shirt, 0, -.04, 0); a.add(s); a.sleeve = s; });
+    const head = mesh(new T.SphereGeometry(.11, 20, 16), skin, 0, 1.1, 0); body.add(head);
+    const cap = mesh(new T.SphereGeometry(.116, 20, 12, 0, Math.PI * 2, 0, Math.PI * .55), hair, 0, 1.11, .005);
+    cap.rotation.x = .35; body.add(cap);
+    const held = mesh(new T.SphereGeometry(.105, 24, 16), std({ roughness: .12, metalness: .15 }), 0, -.44, -.02);
+    armR.add(held); held.visible = false;
+    if (opts.face){
+      const white = std({ color: 0xffffff, roughness: .4 }), black = new T.MeshBasicMaterial({ color: 0x15121c });
+      [-1, 1].forEach(k => {
+        body.add(mesh(new T.SphereGeometry(.024, 12, 10), white, k * .042, 1.12, -.092));
+        body.add(mesh(new T.SphereGeometry(.013, 10, 8), black, k * .042, 1.12, -.112));
+      });
+      const smile = mesh(new T.TorusGeometry(.04, .009, 6, 16, Math.PI), black, 0, 1.075, -.1);
+      smile.rotation.z = Math.PI; body.add(smile);
+    }
+    if (opts.gloves){
+      const glove = std({ color: 0xb6f000, roughness: .6 });
+      [armL, armR].forEach(a => a.add(mesh(new T.SphereGeometry(.075, 14, 10), glove, 0, -.43, 0)));
+    }
+    return { root, body, legL, legR, armL, armR, shirt, trim, hair, held, team: null };
+  }
+  // Puts a person in a kit (shirts through patternFill, contrast sleeves, the collar), with hair
+  // dark for a grown-up, and a ball of the given kind in their hand.
+  function dress(b, team, adult, kind){
+    const st = PATTERNED[team], T0 = TEAMS[team];
+    if (kind) dressBall(b.held.material, kind, team);
+    if (b.team !== team){
+      b.team = team;
+      b.shirt.map = shirtTex(team); b.shirt.needsUpdate = true;
+      const sleeve = SLEEVED.includes(team) ? T0.trim : null;
+      [b.armL, b.armR].forEach(a => { a.sleeve.material = sleeve ? std({ color: sleeve, roughness: .75 }) : b.shirt; });
+      b.trim.color.set(st ? st.trim || st.accent : T0.trim);
+    }
+    b.hair.color.set(adult ? 0x2a1d14 : 0x4a3020);
+  }
+
+  return { load, begin, once, render, aim, env, fail, paint, rnd, std, mesh, ballMap, dressBall, shirtTex,
+    particles, emit, burst, stepParticles, whizz, person, dress, RAINBOW,
+    get T(){ return T; }, get R(){ return R; }, get W(){ return W; }, get H(){ return H; }, tex };
+})();
+
+/* ---------- bowling in 3-D ---------- */
+// The bowling lane in 3-D (see G3). The camera is the 2-D game's, made real: same place on screen
+// for the foul line and the pins, from 13.8 m back (the 2-D one squashed the lane to fit instead),
+// looking straight ahead with the picture shifted down, so the pins stand upright rather than
+// leaning in. It follows the ball down the lane exactly as before (`game.cam`). Lane coordinates
+// (y down the lane, x across, h up) become Three's as (x, h, -y).
+const Lane3D = (() => {
+  const D0 = 13.8, PITCH = 2;          // the camera's distance behind the foul line; lane centre to lane centre
+  const { paint, rnd, std, mesh, dressBall, particles, emit, burst, stepParticles, whizz, RAINBOW } = G3;
+  let T = null, scene, cam, R;
+  let pins = [], ghosts = [], faces = [], ball, ballGhost, blob, bowler, bumpers, dots, ring, lights = [];
+  let spark, boom, fpx = 1, lastClock = 0, close = 0, shake = 0, party = -9, lastFlash = '', fireworks = [], wasCrash = false;
+  const tex = {};
+
+  /* ----- textures, painted on 2-D canvases ----- */
+  // Maple boards with grain, 39 to a lane, as on a real one.
+  function boards(g, w, h, base, seed){
+    const r = rnd(seed), bw = w / 39;
+    for (let k = 0; k < 39; k++){
+      const l = 46 + r() * 8;
+      g.fillStyle = `hsl(${32 + r() * 5}, ${48 + r() * 10}%, ${l}%)`;
+      g.fillRect(k * bw, 0, bw + 1, h);
+      for (let n = 0; n < 7; n++){
+        g.strokeStyle = `rgba(110,60,20,${.05 + r() * .08})`; g.lineWidth = .6 + r();
+        const x = k * bw + r() * bw; g.beginPath(); g.moveTo(x, 0);
+        for (let y = 0; y <= h; y += 64) g.lineTo(x + Math.sin(y * .004 + r() * 6) * bw * .15, y);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(90,50,15,.28)'; g.fillRect(k * bw, 0, 1, h);
+    }
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+  }
+  function laneTex(G){
+    return paint(512, 4096, (g, w, h) => {
+      const my = y => (1 - y / G.DECK) * h, mx = x => (x + G.HALF) / (2 * G.HALF) * w;
+      boards(g, w, h, 'rgba(255,215,150,.08)', 7);
+      g.fillStyle = 'rgba(255,240,215,.18)'; g.fillRect(0, 0, w, my(G.LANE - .3));       // the pin deck, a little paler
+      g.fillStyle = '#6b3b12';
+      for (let i = 0; i < 7; i++){                                                  // the aiming arrows, every five boards
+        const x = mx(-G.HALF + (5 + 5 * i) * 2 * G.HALF / 39), tip = 4.3 + (3 - Math.abs(i - 3)) * .3;
+        g.beginPath(); g.moveTo(x, my(tip)); g.lineTo(x - 7, my(tip - .5)); g.lineTo(x + 7, my(tip - .5)); g.closePath(); g.fill();
+      }
+      for (let i = 0; i < 5; i++){                                                  // the guide dots
+        const x = mx(-G.HALF + (3 + 8 * i) * 2 * G.HALF / 39);
+        g.beginPath(); g.arc(x, my(2.1), 4, 0, 7); g.fill();
+      }
+      g.fillStyle = 'rgba(120,70,25,.45)';
+      for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++){                      // the pin spots
+        g.beginPath(); g.arc(mx((i - r / 2) * G.GAP), my(G.LANE + r * G.ROW), 8, 0, 7); g.fill();
+      }
+    });
+  }
+  function approachTex(){
+    return paint(512, 512, (g, w, h) => {
+      boards(g, w, h, 'rgba(255,240,210,.22)', 11);
+      g.fillStyle = '#6b3b12';
+      [.45, .8].forEach(f => { for (let i = 0; i < 5; i++){ g.beginPath(); g.arc(w * (.2 + i * .15), h * f, 4, 0, 7); g.fill(); } });
+    });
+  }
+  // A pin: white with two red stripes round the neck. The lathe's v runs up the pin.
+  function pinTex(){
+    return paint(64, 256, (g, w, h) => {
+      g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#c8102e'; [[.595, .625], [.65, .68]].forEach(([a, b]) => g.fillRect(0, (1 - b) * h, w, (b - a) * h));
+    });
+  }
+  // A bowling ball in a kit's colours: the main colour swirled with the second one, finger holes.
+
+  /* ----- the scene ----- */
   // A flat strip of floor from lane y0 to y1 and x0 to x1, at height h.
   function strip(x0, x1, y0, y1, h, mat){
     const g = new T.PlaneGeometry(x1 - x0, y1 - y0); g.rotateX(-Math.PI / 2);
@@ -5171,27 +5346,12 @@ const Lane3D = (() => {
   const geo = {}, mat = {};
   function build(){
     const G = Tenpin;
-    cv = $('#m3d');
-    R = new T.WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance' });
-    R.shadowMap.enabled = true; R.shadowMap.type = T.PCFShadowMap;
-    R.toneMapping = T.NeutralToneMapping || T.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); dead = true; cv.hidden = true; });
+    T = G3.T; R = G3.R;
     scene = new T.Scene();
     scene.background = new T.Color(0x141033);
     scene.fog = new T.Fog(0x141033, 34, 70);
     cam = new T.PerspectiveCamera();
-    flipM = new T.Matrix4().makeScale(-1, -1, 1);
-
-    // Reflections in the polished wood come from a simple lit room, blurred (PMREM): no extra files.
-    const room = new T.Scene();
-    room.add(new T.Mesh(new T.BoxGeometry(40, 12, 60), new T.MeshBasicMaterial({ color: 0x2a2350, side: T.BackSide })));
-    for (let i = -2; i <= 2; i++){
-      const lamp = new T.Mesh(new T.PlaneGeometry(1.2, 30), new T.MeshBasicMaterial({ color: new T.Color(3, 2.8, 2.5) }));
-      lamp.rotation.x = Math.PI / 2; lamp.position.set(i * 4, 5.9, 0); room.add(lamp);
-    }
-    const pm = new T.PMREMGenerator(R);
-    scene.environment = pm.fromScene(room, .04).texture; pm.dispose();
-    scene.environmentIntensity = .7;
+    G3.env(scene, 0x2a2350, 3, .7);           // the shine on the polished wood
 
     scene.add(new T.HemisphereLight(0xfff6ea, 0x2a2040, 1.3));
     const sun = new T.DirectionalLight(0xfff0dc, 2.4);           // the lights over the pin deck
@@ -5201,7 +5361,7 @@ const Lane3D = (() => {
     scene.add(sun, sun.target);
     const front = new T.DirectionalLight(0xffffff, .9); front.position.set(-2, 6, 10); scene.add(front);
 
-    tex.lane = laneTex(G); tex.pin = pinTex(); tex.soft = soft();
+    tex.lane = laneTex(G); tex.pin = pinTex(); tex.soft = G3.tex.soft;
     geo.pin = pinGeo(G);
     mat.pin = std({ map: tex.pin, roughness: .28, metalness: 0 });
 
@@ -5236,14 +5396,14 @@ const Lane3D = (() => {
 
     // Our pins (and their reflections), each with its own material so it can fade when swept away,
     // and each with a face.
-    tex.glow = glow(); mat.star = new T.SpriteMaterial({ map: starTex(), depthWrite: false });
+    mat.star = new T.SpriteMaterial({ map: G3.tex.star, depthWrite: false });
     geo.eye = new T.SphereGeometry(.016, 14, 10); geo.pupil = new T.SphereGeometry(.008, 10, 8);
     for (let i = 0; i < 10; i++){
       const m = new T.Mesh(geo.pin, mat.pin.clone()); m.castShadow = true; m.receiveShadow = true;
       pins.push(m); scene.add(m); faces.push(face(m));
       const gh = new T.Mesh(geo.pin, m.material); ghosts.push(gh); mirror.add(gh);
     }
-    spark = particles(500, .05); boom = particles(500, .09);
+    spark = particles(scene, 500, .05); boom = particles(scene, 500, .09);
     geo.ball = new T.SphereGeometry(G.BALL_R, 40, 28);
     ball = new T.Mesh(geo.ball, std({ roughness: .12, metalness: .15 })); ball.castShadow = true; scene.add(ball);
     ballGhost = new T.Mesh(geo.ball, ball.material); mirror.add(ballGhost);
@@ -5258,7 +5418,7 @@ const Lane3D = (() => {
     ring = new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: 0x3cc35a, transparent: true, depthWrite: false }));
     ring.renderOrder = 3; scene.add(ring);
 
-    bowler = makeBowler(); scene.add(bowler.root);
+    bowler = G3.person(); scene.add(bowler.root);
   }
 
   /* ----- the fun bits: faces on the pins, sparkles, fireworks ----- */
@@ -5305,47 +5465,11 @@ const Lane3D = (() => {
       s.position.set(head.x + Math.cos(a) * .08, head.y + .09, head.z + Math.sin(a) * .08);
     });
   }
-  // A pool of glowing dots: the ball's trail, the sparks off falling pins, the fireworks.
-  function particles(n, size){
-    const g = new T.BufferGeometry(), pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
-    g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3));
-    const pts = new T.Points(g, new T.PointsMaterial({ size, map: tex.glow, vertexColors: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
-    pts.frustumCulled = false; pts.renderOrder = 4; scene.add(pts);
-    return { pts, pos, col, n, size, i: 0, v: new Float32Array(n * 3), base: new Float32Array(n * 3), life: new Float32Array(n), max: new Float32Array(n), grav: new Float32Array(n) };
-  }
-  const tc = () => new T.Color();
-  let cc;
-  function emit(s, x, y, z, vx, vy, vz, life, colour, grav){
-    const i = s.i; s.i = (i + 1) % s.n;
-    cc = cc || tc(); cc.set(colour);
-    s.pos.set([x, y, z], i * 3); s.v.set([vx, vy, vz], i * 3); s.base.set([cc.r, cc.g, cc.b], i * 3);
-    s.life[i] = s.max[i] = life; s.grav[i] = grav || 0;
-  }
-  function burst(s, x, y, z, n, speed, cols, life, grav){
-    for (let k = 0; k < n; k++){
-      const a = Math.random() * 6.283, e = Math.acos(Math.random() * 2 - 1), sp = speed * (.6 + Math.random() * .4);
-      emit(s, x, y, z, Math.sin(e) * Math.cos(a) * sp, Math.cos(e) * sp, Math.sin(e) * Math.sin(a) * sp,
-        life * (.7 + Math.random() * .5), cols[k % cols.length], grav);
-    }
-  }
-  function stepParticles(s, dt){
-    for (let i = 0; i < s.n; i++){
-      const j = i * 3;
-      if (s.life[i] <= 0){ s.col[j] = s.col[j + 1] = s.col[j + 2] = 0; continue; }
-      s.life[i] -= dt; s.v[j + 1] -= s.grav[i] * dt;
-      s.pos[j] += s.v[j] * dt; s.pos[j + 1] += s.v[j + 1] * dt; s.pos[j + 2] += s.v[j + 2] * dt;
-      const f = Math.max(0, s.life[i] / s.max[i]);
-      s.col[j] = s.base[j] * f; s.col[j + 1] = s.base[j + 1] * f; s.col[j + 2] = s.base[j + 2] * f;
-    }
-    s.pts.geometry.attributes.position.needsUpdate = s.pts.geometry.attributes.color.needsUpdate = true;
-    s.pts.material.size = s.size * fpx;
-  }
   function trailCols(game){
     const k = game.kind(), t = TEAMS[game.team()];
     return k === 'fire' ? ['#ffd23a', '#ff7a00', '#ff3300'] : k === 'earth' ? ['#7fd0ff', '#ffffff', '#3cc35a']
       : k === 'foot' ? ['#ffffff', '#f5c400'] : [t.main, t.trim, '#ffffff'];
   }
-  const RAINBOW = ['#e63946', '#f5c400', '#3cc35a', '#2f9be0', '#c86bfa', '#ff8c1a', '#ffffff'];
   // What changed since last frame: a pin going down, the crash, a strike or a spare.
   function events(game, dt){
     const b = game.ball, c = game.clock;
@@ -5382,82 +5506,20 @@ const Lane3D = (() => {
       whizz();
       return false;
     });
-    stepParticles(spark, dt); stepParticles(boom, dt);
-  }
-  // A firework going pop.
-  function whizz(){
-    const c = audio(); if (!c) return;
-    try {
-      const o = c.createOscillator(), gn = c.createGain(), t = c.currentTime;
-      o.type = 'triangle'; o.frequency.setValueAtTime(900 + Math.random() * 500, t); o.frequency.exponentialRampToValueAtTime(200, t + .25);
-      gn.gain.setValueAtTime(.12, t); gn.gain.exponentialRampToValueAtTime(.001, t + .3);
-      o.connect(gn).connect(c.destination); o.start(t); o.stop(t + .32);
-    } catch(e) {}
-  }
-
-  /* ----- the bowler, seen from behind ----- */
-  function makeBowler(){
-    const skin = std({ color: 0xf1c79b, roughness: .7 }), dark = std({ color: 0x2b2b3a, roughness: .8 });
-    const shoe = std({ color: 0xf4f4f4, roughness: .5 }), hair = std({ color: 0x4a3020, roughness: .9 });
-    const shirt = std({ roughness: .75 }), trim = std({ roughness: .75 });
-    const root = new T.Group(), body = new T.Group(); root.add(body);
-    // A limb hanging from a joint at (x, y): a group to swing, the capsule hanging below it.
-    const limb = (x, y, r, len, m) => {
-      const j = new T.Group(); j.position.set(x, y, 0);
-      const c = mesh(new T.CapsuleGeometry(r, len, 6, 12), m, 0, -len / 2 - r * .5, 0); c.castShadow = true; j.add(c);
-      body.add(j); return j;
-    };
-    const legL = limb(-.075, .5, .055, .38, dark), legR = limb(.075, .5, .055, .38, dark);
-    [legL, legR].forEach(l => l.add(mesh(new T.BoxGeometry(.1, .06, .17), shoe, 0, -.5, -.03)));
-    const shorts = mesh(new T.CylinderGeometry(.15, .16, .14, 18), dark, 0, .52, 0); shorts.scale.z = .65; body.add(shorts);
-    const torsoGeo = new T.CylinderGeometry(.17, .15, .4, 24, 1); torsoGeo.rotateY(Math.PI);   // the pattern's middle at the back
-    const torso = mesh(torsoGeo, shirt, 0, .78, 0); torso.scale.z = .62; torso.castShadow = true; body.add(torso);
-    const collar = mesh(new T.TorusGeometry(.06, .016, 8, 20), trim, 0, .98, 0); collar.rotation.x = Math.PI / 2; body.add(collar);
-    const armL = limb(-.2, .93, .045, .34, skin), armR = limb(.2, .93, .045, .34, skin);
-    [armL, armR].forEach(a => { const s = mesh(new T.CylinderGeometry(.06, .055, .13, 14), shirt, 0, -.04, 0); a.add(s); a.sleeve = s; });
-    const head = mesh(new T.SphereGeometry(.11, 20, 16), skin, 0, 1.1, 0); body.add(head);
-    const cap = mesh(new T.SphereGeometry(.116, 20, 12, 0, Math.PI * 2, 0, Math.PI * .55), hair, 0, 1.11, .005);
-    cap.rotation.x = .35; body.add(cap);
-    const held = mesh(new T.SphereGeometry(.105, 24, 16), std({ roughness: .12, metalness: .15 }), 0, -.44, -.02);
-    armR.add(held);
-    return { root, body, legL, legR, armL, armR, shirt, trim, hair, held, team: null };
-  }
-  function dressBowler(team, adult, kind){
-    const b = bowler, st = PATTERNED[team], T0 = TEAMS[team];
-    dressBall(b.held.material, kind, team);
-    if (b.team !== team){
-      b.team = team;
-      b.shirt.map = shirtTex(team); b.shirt.needsUpdate = true;
-      const sleeve = SLEEVED.includes(team) ? T0.trim : null;
-      [b.armL, b.armR].forEach(a => { a.sleeve.material = sleeve ? std({ color: sleeve, roughness: .75 }) : b.shirt; });
-      b.trim.color.set(st ? st.trim || st.accent : T0.trim);
-    }
-    b.hair.color.set(adult ? 0x2a1d14 : 0x4a3020);
+    stepParticles(spark, dt, fpx); stepParticles(boom, dt, fpx);
   }
 
   /* ----- each frame ----- */
-  const UP = () => new T.Vector3(0, 1, 0);
   let up, v3;
-  function size(){
-    const w = cv.clientWidth, h = cv.clientHeight, d = Math.min(window.devicePixelRatio || 1, 2);
-    if (w === W && h === H && d === dpr) return;
-    W = w; H = h; dpr = d; R.setPixelRatio(d); R.setSize(w, h, false);
-  }
   // The 2-D game's camera, made real (see the note at the top): f is the focal length in pixels,
   // camH the camera's height, hz where the horizon sits on the screen.
   function aimCamera(game, flipped){
-    const G = game, m = Math.min(W, H * .62), f = .36 * m * D0 / G.HALF;
+    const G = game, W = G3.W, H = G3.H, m = Math.min(W, H * .62), f = .36 * m * D0 / G.HALF;
     const z1 = D0, z2 = D0 + G.LANE, camH = .59 * H / (f * (1 / z1 - 1 / z2)), hz = .86 * H - f * camH / z1;
-    const n = .05;
     // The close-up on the pins: further down the lane and lower in proportion, so the pins grow
     // but stay where they were on the screen. Then the shake when they crash.
     const d0 = D0 + G.LANE - G.cam, d = d0 - close, sh = shake * Math.sin(G.clock * 70), sv = shake * Math.cos(G.clock * 53);
-    cam.position.set(sh, camH * d / d0 + sv, D0 - G.cam - close); cam.rotation.set(0, 0, 0); cam.updateMatrixWorld();
-    fpx = f / (H * .5);
-    cam.near = n; cam.far = 90;
-    cam.projectionMatrix.makePerspective(-W / 2 / f * n, W / 2 / f * n, hz / f * n, (hz - H) / f * n, n, 90);
-    if (flipped) cam.projectionMatrix.premultiply(flipM);
-    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    fpx = G3.aim(cam, f, hz, sh, camH * d / d0 + sv, D0 - G.cam - close, flipped, 90);
   }
   function posePin(m, gh, p, clock){
     m.visible = gh.visible = !p.gone && p.fade > 0;
@@ -5499,7 +5561,7 @@ const Lane3D = (() => {
     b.root.visible = on && by - (game.cam - D0) > 3.5;
     if (!b.root.visible) return;
     const adult = game.duo && game.who;
-    dressBowler(game.team(), adult, game.kind());
+    G3.dress(b, game.team(), adult, game.kind()); b.held.visible = true;
     const s = (adult ? 1.75 : 1.2) / 1.22 * .5;            // a little under life size, as in 2-D, or they'd fill the screen
     b.root.scale.setScalar(s); b.root.position.set(-.12, 0, -by);
     const sw = ph === 'runup' ? Math.sin(game.stride) : 0;
@@ -5532,10 +5594,8 @@ const Lane3D = (() => {
   const BULBS = ['#e63946', '#f5c400', '#3cc35a', '#2f9be0', '#c86bfa'];
   // Draws this frame. Returns false when there's no 3-D picture, and Tenpin draws its 2-D one.
   function draw(game){
-    if (!R || dead){ if (cv) cv.hidden = true; return false; }
-    up = up || UP(); v3 = v3 || new T.Vector3();
-    cv.hidden = false; size();
-    if (!W || !H) return false;
+    if (!G3.begin() || !G3.once(mod)) return false;
+    up = up || new T.Vector3(0, 1, 0); v3 = v3 || new T.Vector3();
     let dt = game.clock - lastClock; lastClock = game.clock;
     if (!(dt >= 0 && dt < .1)) dt = 0;
     const b = game.ball, ph = game.phase;
@@ -5551,11 +5611,10 @@ const Lane3D = (() => {
     events(game, dt);
     const partying = game.clock - party < 3.5, tick = Math.floor(game.clock * (partying ? 14 : 3));
     lights.forEach((l, i) => l.material.color.set((partying ? RAINBOW : BULBS)[(i + tick) % (partying ? RAINBOW : BULBS).length]));
-    try { R.render(scene, cam); } catch(e){ dead = true; cv.hidden = true; return false; }
-    const g = Mini.ctx(); g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height); g.restore();
-    return true;
+    return G3.render(scene, cam);
   }
-  return { load, draw };
+  const mod = { build, draw, load: G3.load };
+  return mod;
 })();
 
 /* ---------- prize game: ten-pin bowling ---------- */
