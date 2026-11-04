@@ -2518,6 +2518,59 @@ const Pong = (() => {
 })();
 
 /* ---------- shell for the tap-based prize games ---------- */
+/* ---------- effects for the 2-D prize games ---------- */
+// A little layer of fun the Mini shell runs for every prize game, drawn on top of it: bursts of
+// sparkles, words that float up and fade ("+1", "Double!"), fireworks with a pop, and a shake.
+// Games just call Fx.burst/pop/firework/shake; the shell resets, moves and draws it all.
+const Fx = {
+  parts: [], pops: [], shakeT: 0, shakeA: 0,
+  reset(){ this.parts = []; this.pops = []; this.shakeT = 0; },
+  burst(x, y, cols, n, speed, size, grav){
+    if (reduced) n = Math.ceil(n / 3);
+    for (let i = 0; i < n; i++){
+      const a = Math.random() * Math.PI * 2, v = speed * (.35 + Math.random() * .65);
+      this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .5, max: 1.1,
+        r: size * (.6 + Math.random() * .6), c: cols[i % cols.length], g: grav == null ? 300 : grav, star: Math.random() < .3 });
+    }
+  },
+  // `key`: a new pop with the same key replaces the old one (so "Double!" and "Triple!" don't stack).
+  pop(text, x, y, col, size, key){
+    if (key) this.pops = this.pops.filter(p => p.key !== key);
+    this.pops.push({ text, x, y, col: col || '#fff', size: size || 34, t: 0, key });
+  },
+  firework(x, y){
+    const pal = ['#e63946', '#f5c400', '#3cc35a', '#2f9be0', '#c86bfa', '#ff8c1a'];
+    const a = pal[Math.floor(Math.random() * pal.length)], b = pal[Math.floor(Math.random() * pal.length)];
+    this.burst(x, y, [a, b, '#ffffff'], 46, 340, 4, 160);
+    G3.whizz();
+  },
+  fireworks(W, H, n){ for (let i = 0; i < n; i++) setTimeout(() => this.firework(W * (.2 + Math.random() * .6), H * (.15 + Math.random() * .3)), i * 280); },
+  shake(a){ if (!reduced){ this.shakeT = .35; this.shakeA = a; } },
+  offset(){ return this.shakeT > 0 ? [Math.sin(this.shakeT * 90) * this.shakeA * this.shakeT / .35, Math.cos(this.shakeT * 70) * this.shakeA * this.shakeT / .35] : [0, 0]; },
+  update(dt){
+    this.shakeT = Math.max(0, this.shakeT - dt);
+    this.parts.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= .985; p.life -= dt; });
+    this.parts = this.parts.filter(p => p.life > 0);
+    this.pops.forEach(p => p.t += dt);
+    this.pops = this.pops.filter(p => p.t < 1.1);
+  },
+  draw(g){
+    this.parts.forEach(p => {
+      g.globalAlpha = Math.max(0, Math.min(1, p.life / .4)); g.fillStyle = p.c; g.beginPath();
+      if (p.star){ for (let k = 0; k < 10; k++){ const a = k * Math.PI / 5, r = k % 2 ? p.r * .45 : p.r * 1.3; g.lineTo(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r); } }
+      else g.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      g.fill();
+    });
+    g.globalAlpha = 1;
+    this.pops.forEach(p => {
+      const k = p.t / 1.1, sc = k < .15 ? .6 + k / .15 * .5 : 1.1 - (k - .15) * .1;
+      g.globalAlpha = Math.max(0, 1 - Math.max(0, k - .55) / .45);
+      Mini.text(p.text, p.x, p.y - k * 60, p.size * sc, p.col);
+    });
+    g.globalAlpha = 1;
+  }
+};
+
 const Mini = (() => {
   const cv = $('#mc'), g = cv.getContext('2d'), msg = $('#mmsg');
   let W, H, dpr, raf = 0, last = 0, tok = 0, game = null, after = null, key = '', running = false, confirming = false;
@@ -2606,7 +2659,7 @@ const Mini = (() => {
     game = gameObj; after = cb; key = gameKey; tok++; confirming = false;
     $('#m3d').hidden = true;   // the 3-D layer under the canvas (bowling); a game that uses it turns it back on
     show('mini'); audio(); dims();
-    game.setup(W, H);
+    Fx.reset(); game.setup(W, H);
     running = false; // held until the intro clears, so nothing moves before the child can play
     say(`<div class="say" style="font-size:clamp(30px,8vw,50px)">${game.title}</div><p class="small">${game.intro}</p>`);
     speak(`${game.title}! ${game.intro}`);
@@ -2617,7 +2670,14 @@ const Mini = (() => {
   function loop(t){
     const dt = Math.min(.033, (t - last) / 1000); last = t;
     if (running && game && game.update) game.update(dt);
-    if (game){ if (!game.sky) pitch(); game.draw(); }   // a game with its own sky (space) paints the whole canvas itself
+    Fx.update(dt);
+    if (game){
+      const [sx, sy] = Fx.offset();
+      g.save(); g.translate(sx, sy);
+      if (!game.sky) pitch(); game.draw();             // a game with its own sky (space) paints the whole canvas itself
+      g.restore();
+      Fx.draw(g);
+    }
     raf = requestAnimationFrame(loop);
   }
   // `spoken` overrides what the voice reads - a title with "Man Utd" in it reads better
@@ -2627,6 +2687,7 @@ const Mini = (() => {
     running = false; tok++;
     awardTrophy(key);
     whistle(0, .3); whistle(.45, .3); whistle(.9, .9);
+    Fx.fireworks(W, H, 5);                             // every finished game ends with fireworks
     confetti(S.team); speak(spoken || `${title} ${sub || ''}`);
     msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(32px,9vw,54px)">${title}</div>
       ${sub ? `<p class="small">${sub}</p>` : ''}<button class="big" id="mdone">🏆 Done</button></div>`;
@@ -2835,24 +2896,48 @@ const Penalty = {
 };
 
 /* ---------- prize game: keepy-uppies ---------- */
+// Fun on top: pick a ball first; every kick sparkles and squashes the ball; every five is a
+// firework and the count said out loud; from ten the ball's on fire. Once a fall, just before the
+// ball lands, it goes into slow motion ("Quick!") for a last chance (`SAVE_K` of the speed).
 const Keepy = {
   title: 'Keepy-uppies', intro: 'Tap the ball to keep it up!',
+  SAVE_K: .4,
   setup(W, H){
     this.W = W; this.H = H;
     this.r = Math.max(22, Math.min(38, Math.min(W, H) * .055));
     this.ground = H * .92;
     this.x = W / 2; this.y = H * .3; this.vx = 0; this.vy = 0;
     this.n = 0; this.grav = H * .8; this.spin = 0;
+    this.picking = true; this.asked = false; this.kind = 'foot'; this.time = 0;
+    this.squash = 0; this.slow = 0; this.saved = false; this.trail = [];
   },
   resize(W, H){ this.W = W; this.H = H; this.ground = H * .92; this.x = Math.min(this.x, W - this.r); },
   down(x, y){
+    if (this.picking){
+      const k = ballCardAt(this.W, this.H, x, y); if (!k) return;
+      this.kind = k; this.picking = false; ping(); speak(`${BALL_SAY[k]} Tap it to keep it up!`);
+      return;
+    }
     if (Math.hypot(x - this.x, y - this.y) > this.r * 2.6) return;
     this.vy = -this.H * .5;
     this.vx = Math.max(-this.W * .45, Math.min(this.W * .45, this.vx + (this.x - x) * 2.6));
     this.n++; thud();
-    if (this.n % 5 === 0) cheer();
+    this.squash = 1; this.slow = 0; this.saved = false;
+    Fx.burst(this.x, this.y + this.r, ['#ffffff', '#f5c400', TEAMS[S.team].main], 12, 260, 4);
+    Fx.pop('+1', this.x + this.r * 1.6, this.y - this.r, '#f5c400', 30);
+    if (this.n % 5 === 0){
+      cheer(); speak(this.n === 10 ? 'Ten! You are on fire!' : `${this.n}!`);
+      Fx.firework(this.W * (.25 + Math.random() * .5), this.H * .18); Fx.shake(6);
+    }
   },
   update(dt){
+    if (this.picking){ if (!this.asked){ this.asked = true; speak('Pick your ball!'); } return; }
+    // The last-chance slow motion, once a fall.
+    if (!this.saved && this.vy > 0 && this.y + this.r > this.ground - this.r * 3){ this.saved = true; this.slow = .7; Fx.pop('Quick!', this.W / 2, this.H * .45, '#ff8c1a', 40); }
+    if (this.slow > 0){ this.slow -= dt; dt *= this.SAVE_K; }
+    this.time += dt; this.squash = Math.max(0, this.squash - dt * 5);
+    this.trail.push([this.x, this.y]); if (this.trail.length > 10) this.trail.shift();
+    if (this.n >= 10 && Math.random() < .8) Fx.burst(this.x, this.y + this.r * .6, ['#ffd23a', '#ff7a00', '#ff3300'], 2, 60, 5, -120);
     this.vy += this.grav * dt;
     this.vx += (this.W / 2 - this.x) * .3 * dt;
     this.x += this.vx * dt; this.y += this.vy * dt;
@@ -2867,24 +2952,37 @@ const Keepy = {
     }
   },
   draw(){
-    const W = this.W, H = this.H;
+    const W = this.W, H = this.H, g = Mini.ctx();
+    if (this.picking){ drawBallCards(W, H, this.time, S.team); return; }
     Mini.line(0, this.ground, W, this.ground, 'rgba(255,255,255,.55)', 5);
-    Mini.text(String(this.n), W / 2, H * .22, Math.min(120, W * .3), '#f5c400');
+    Mini.text(String(this.n), W / 2, H * .22, Math.min(120, W * .3) * (1 + this.squash * .15), this.n >= 10 ? '#ff8c1a' : '#f5c400');
     Mini.text(`Best ${S.keepyBest}`, W / 2, H * .32, Math.min(26, W * .062));
-    Mini.ballAt(this.x, this.y, this.r);
+    // Its shadow on the grass, smaller and fainter the higher it is, and a fading trail.
+    const up = Math.max(0, Math.min(1, (this.ground - this.y) / H));
+    g.fillStyle = `rgba(0,0,0,${.3 * (1 - up)})`; g.beginPath(); g.ellipse(this.x, this.ground, this.r * (1.1 - up * .6), this.r * .25, 0, 0, Math.PI * 2); g.fill();
+    this.trail.forEach(([x, y], i) => { g.globalAlpha = i / this.trail.length * .25; ballIcon(g, this.kind, x, y, this.r * (.6 + i / 25), S.team); });
+    g.globalAlpha = 1;
+    const sq = this.squash * .22;
+    g.save(); g.translate(this.x, this.y); g.scale(1 + sq, 1 - sq); g.rotate(this.spin);
+    ballIcon(g, this.kind, 0, 0, this.r, S.team);
+    g.restore();
   }
 };
 
 /* ---------- prize game: goal-mouth scramble ---------- */
+// Fun on top: now and then a golden ball comes down, and saving it counts three (`GOLD`); saves
+// in quick succession get "Double!", "Triple!", "Super!"; every save sparkles and pops a "+1";
+// and the last five seconds are counted down out loud.
 const Scramble = {
   title: 'Scramble', intro: 'Tap the balls before they reach the goal!',
-  TIME: 30,
+  TIME: 30, GOLD: .12, COMBO: .7,
   setup(W, H){
     this.W = W; this.H = H;
     this.r = Math.max(18, Math.min(30, Math.min(W, H) * .045));
     this.line = H * .86; this.goalW = W * .7; this.goalX = (W - this.goalW) / 2;
     this.balls = []; this.cleared = 0; this.through = 0;
     this.left = this.TIME; this.spawnIn = .6;
+    this.lastSave = -9; this.combo = 0; this.clock = 0; this.said = 6;
   },
   resize(W, H){ this.W = W; this.H = H; this.line = H * .86; this.goalW = W * .7; this.goalX = (W - this.goalW) / 2; },
   down(x, y){
@@ -2893,16 +2991,30 @@ const Scramble = {
       const d = Math.hypot(x - b.x, y - b.y);
       if (d < this.r * 2.4 && d < bestD){ bestD = d; best = i; }
     });
-    if (best >= 0){ this.balls.splice(best, 1); this.cleared++; thud(); if (this.cleared % 5 === 0) cheer(); }
+    Fx.pop('🧤', x, y, '#fff', 34);
+    if (best < 0) return;
+    const b = this.balls.splice(best, 1)[0], pts = b.gold ? 3 : 1;
+    this.cleared += pts; thud();
+    Fx.burst(b.x, b.y, b.gold ? ['#ffd700', '#fff3a0', '#ffffff'] : ['#ffffff', '#f5c400', '#3cc35a'], b.gold ? 30 : 12, b.gold ? 380 : 260, 4);
+    Fx.pop(`+${pts}`, b.x, b.y - this.r, b.gold ? '#ffd700' : '#f5c400', b.gold ? 44 : 32);
+    if (b.gold){ cheer(); speak('Golden ball! Three!'); Fx.shake(5); }
+    this.combo = this.clock - this.lastSave < this.COMBO ? this.combo + 1 : 0; this.lastSave = this.clock;
+    if (this.combo >= 1) Fx.pop(['Double!', 'Triple!', 'Super!'][Math.min(2, this.combo - 1)], this.W / 2, this.H * .3, '#ff8c1a', 46, 'combo');
+    if (this.combo === 2) cheer();
+    if (!b.gold && this.cleared % 5 === 0) cheer();
   },
   update(dt){
-    this.left -= dt;
+    this.left -= dt; this.clock += dt;
+    const sec = Math.ceil(this.left);
+    if (sec < this.said && sec >= 1 && sec <= 5){ this.said = sec; speak(String(sec)); }
     const rush = 1 - this.left / this.TIME;
     this.spawnIn -= dt;
     if (this.spawnIn <= 0){
       this.spawnIn = .95 - rush * .5;
-      this.balls.push({ x: this.goalX + this.r + Math.random() * (this.goalW - this.r * 2), y: -this.r, vy: this.H * (.11 + rush * .11 + Math.random() * .04) });
+      this.balls.push({ x: this.goalX + this.r + Math.random() * (this.goalW - this.r * 2), y: -this.r, vy: this.H * (.11 + rush * .11 + Math.random() * .04),
+        gold: Math.random() < this.GOLD, spin: Math.random() * 6 });
     }
+    this.balls.forEach(b => { if (b.gold && Math.random() < .4) Fx.burst(b.x, b.y, ['#ffd700', '#fff3a0'], 1, 40, 3, 0); });
     this.balls.forEach(b => b.y += b.vy * dt);
     for (let i = this.balls.length - 1; i >= 0; i--){
       if (this.balls[i].y - this.r > this.line){ this.balls.splice(i, 1); this.through++; }
@@ -2912,9 +3024,18 @@ const Scramble = {
   draw(){
     const W = this.W, H = this.H;
     Mini.netGoal(this.goalX, this.line, this.goalW, H - this.line);
-    this.balls.forEach(b => Mini.ballAt(b.x, b.y, this.r));
+    const g = Mini.ctx();
+    this.balls.forEach(b => {
+      if (b.gold){                                  // a golden ball: a gold glow round a gold ball
+        const gl = g.createRadialGradient(b.x, b.y, this.r * .5, b.x, b.y, this.r * 2);
+        gl.addColorStop(0, 'rgba(255,215,0,.55)'); gl.addColorStop(1, 'rgba(255,215,0,0)');
+        g.fillStyle = gl; g.beginPath(); g.arc(b.x, b.y, this.r * 2, 0, Math.PI * 2); g.fill();
+        Mini.ballAt(b.x, b.y, this.r * 1.1);
+        g.globalAlpha = .55; Mini.dot(b.x, b.y, this.r * 1.1, '#ffc800'); g.globalAlpha = 1;
+      } else Mini.ballAt(b.x, b.y, this.r);
+    });
     Mini.text(String(this.cleared), W * .22, H * .12, Math.min(64, W * .16), '#f5c400');
-    Mini.text(`${Math.max(0, Math.ceil(this.left))}s`, W * .78, H * .12, Math.min(46, W * .11));
+    Mini.text(`${Math.max(0, Math.ceil(this.left))}s`, W * .78, H * .12, Math.min(46, W * .11), this.left < 5.5 ? '#ff8c1a' : '#fff');
   }
 };
 
@@ -3015,30 +3136,53 @@ const Crossbar = {
 // Two players, one each end of the phone, tapping their own half to run. The grown-up's runner
 // takes shorter steps (GROWN_TAPS vs CHILD_TAPS) - an adult taps nearly twice as fast as a
 // four-year-old, and without the handicap the race is over before it starts.
+// Fun on top: "Ready... steady... go!" first (taps don't count until "go"), dust kicked up behind
+// the runners, "Nearly there!" near the end, and a finish tape the winner breaks.
 const Sprint = {
   title: 'Sprint race', intro: 'Tap tap tap on your side to run to the line!',
-  CHILD_TAPS: 20, GROWN_TAPS: 32,
+  CHILD_TAPS: 20, GROWN_TAPS: 32, READY: 2.4,
   setup(W, H){
     this.W = W; this.H = H;
     this.teams = [S.team, awayTeam()]; // 0 runs along the bottom, 1 along the top (seen from the far side)
     this.q = [0, 0]; this.p = [0, 0]; this.phase = [0, 0]; this.over = false;
+    this.cd = 0; this.said = -1; this.nearly = false; this.won = -1; this.tapeT = 0;
   },
   resize(W, H){ this.W = W; this.H = H; },
   down(x, y){
-    if (this.over) return;
+    if (this.over || this.cd < this.READY * 2 / 3) return;   // not before "Go!"
     const i = y > this.H / 2 ? 0 : 1;
     this.q[i] = Math.min(1, this.q[i] + 1 / (i ? this.GROWN_TAPS : this.CHILD_TAPS));
   },
+  // Where a runner's feet are on the screen (the top lane is the bottom one turned round).
+  feet(i){
+    const W = this.W, H = this.H, x = W * .14 + W * .72 * this.p[i], y = H * .78 + Math.min(58, H * .07) * .6;
+    return i ? [W - x, H - y] : [x, y];
+  },
   update(dt){
+    this.tapeT += dt;
     if (this.over) return;
+    if (this.cd < this.READY){
+      this.cd += dt;
+      const n = Math.floor(this.cd / (this.READY / 3));
+      if (n !== this.said && n < 3){ this.said = n; speak(['Ready', 'Steady', 'Go!'][n]); if (n === 2) whistle(0, .4); }
+      if (this.cd < this.READY * 2 / 3) return;    // "GO!" stays up a moment while they're off
+    }
     for (const i of [0, 1]){
       const step = (this.q[i] - this.p[i]) * Math.min(1, dt * 9);
       this.p[i] += step; this.phase[i] += step * 60;
+      if (step > .002){                              // dust kicked up behind
+        const [fx, fy] = this.feet(i);
+        Fx.burst(fx - (i ? -1 : 1) * 10, fy, ['rgba(230,215,180,.8)', 'rgba(200,185,150,.7)'], 1, 50, 6, i ? 60 : -60);
+      }
     }
+    if (!this.nearly && Math.max(...this.p) > .8){ this.nearly = true; cheer(); speak('Nearly there!'); }
     const home = this.p[0] > .995, away = this.p[1] > .995;
     if (home || away){
       this.over = true;
       const win = home && away ? (this.p[0] >= this.p[1] ? 0 : 1) : home ? 0 : 1;
+      this.won = win; this.tapeT = 0;
+      const [fx, fy] = this.feet(win);
+      Fx.burst(fx, fy - 40, ['#f5c400', '#ffffff', TEAMS[this.teams[win]].main], 40, 380, 5); Fx.shake(6);
       const t = this.teams[win];
       confetti(t);
       Mini.finish(`${teamName(t)} win!`, 'What a race! Well run, both of you.', `${teamSay(t)} win! What a race! Well run, both of you.`);
@@ -3050,10 +3194,22 @@ const Sprint = {
     Mini.line(x0 - s * .6, y + s * .7, x1 + s * .4, y + s * .7, 'rgba(255,255,255,.45)', 4);
     for (let k = 0; k < 8; k++)                    // a chequered finish line
       Mini.rect(x1 + s * .5 + (k % 2) * 8, y - s * 1.4 + k * s * .27, 8, s * .27, 0, k % 2 ? '#fff' : '#12301a');
+    // The finish tape across the lane, snapping in two for the winner.
+    const tx = x1 + s * .45, ty0 = y - s * 1.1, ty1 = y + s * .6, g = Mini.ctx();
+    g.strokeStyle = '#e63946'; g.lineWidth = 4; g.beginPath();
+    if (this.won === i){
+      const k = Math.min(1, this.tapeT * 2.5);
+      g.moveTo(tx, ty0); g.lineTo(tx + k * s * .8, ty0 + (ty1 - ty0) * .3 + k * s * .4);
+      g.moveTo(tx, ty1); g.lineTo(tx + k * s * .8, ty1 - (ty1 - ty0) * .3 + k * s * .2);
+    } else { g.moveTo(tx, ty0); g.lineTo(tx, ty1); }
+    g.stroke();
     const x = x0 + (x1 - x0) * this.p[i];
     Mini.runner(this.teams[i], x, y, s, this.phase[i]);
     Mini.ballAt(x + s * .55, y + s * .45 - Math.abs(Math.sin(this.phase[i])) * s * .12, s * .2);
-    if (!this.over && this.p[i] < .08) Mini.text('Tap tap tap!', W / 2, H * .62, Math.min(34, W * .085), '#f5c400');
+    if (this.cd < this.READY){
+      const n = Math.min(2, Math.floor(this.cd / (this.READY / 3)));
+      Mini.text(['Ready...', 'Steady...', 'GO!'][n], W / 2, H * .64, Math.min(54, W * .13), n === 2 ? '#3cc35a' : '#f5c400');
+    } else if (!this.over && this.p[i] < .08) Mini.text('Tap tap tap!', W / 2, H * .62, Math.min(34, W * .085), '#f5c400');
   },
   draw(){
     Mini.line(0, this.H / 2, this.W, this.H / 2, 'rgba(255,255,255,.55)', 4);
@@ -3074,7 +3230,7 @@ const Pairs = {
     add(S.team); add(awayTeam());                  // their own two kits are always in the deck
     shuffle(Object.keys(TEAMS)).forEach(add);
     this.cards = shuffle([...picks, ...picks]).map(team => ({ team, up: false, done: false, f: 0 }));
-    this.first = null; this.miss = null; this.wait = 0; this.endIn = 0;
+    this.first = null; this.miss = null; this.wait = 0; this.endIn = 0; this.found = 0; this.clock = 0;
     this.lay(W, H);
   },
   lay(W, H){
@@ -3096,24 +3252,39 @@ const Pairs = {
     if (!this.first){ this.first = c; speak(teamSay(c.team)); return; }
     const a = this.first; this.first = null;
     if (a.team === c.team){
-      a.done = c.done = true; cheer(); speak(`${teamSay(c.team)}! A pair!`);
-      if (this.cards.every(k => k.done)) this.endIn = 1.4;
+      a.done = c.done = true; cheer(); this.found++;
+      // Counting the pairs as they're found.
+      speak(`${teamSay(c.team)}! ${this.found === 1 ? 'That\'s one pair!' : `That's ${this.found} pairs!`}`);
+      const cols = ['#f5c400', '#ffffff', TEAMS[c.team].main];
+      [a, c].forEach(k => { k.pop = 1; Fx.burst(k.x + this.cw / 2, k.y + this.ch / 2, cols, 18, 300, 5); });
+      Fx.pop(String(this.found), c.x + this.cw / 2, c.y, '#f5c400', 48);
+      if (this.cards.every(k => k.done)){ this.endIn = 1.8; Fx.shake(5); }
     } else { speak(teamSay(c.team)); this.wait = 1.4; this.miss = [a, c]; } // no "wrong" - they just turn back
   },
   update(dt){
-    this.cards.forEach(c => { c.f = reduced ? +c.up : Math.max(0, Math.min(1, c.f + (c.up ? 1 : -1) * dt / .22)); });
+    this.clock += dt;
+    this.cards.forEach(c => { c.f = reduced ? +c.up : Math.max(0, Math.min(1, c.f + (c.up ? 1 : -1) * dt / .22)); c.pop = Math.max(0, (c.pop || 0) - dt * 2.5); });
     if (this.wait > 0 && (this.wait -= dt) <= 0){ this.miss.forEach(c => c.up = false); this.miss = null; }
     if (this.endIn > 0 && (this.endIn -= dt) <= 0) Mini.finish('All paired up!', `You found all ${this.PAIRS} pairs!`);
   },
   draw(){
     const cw = this.cw, ch = this.ch;
-    this.cards.forEach(c => {
-      const sx = Math.abs(1 - 2 * c.f), w = cw * Math.max(.04, sx), x = c.x + (cw - w) / 2, face = c.f > .5;
-      Mini.rect(x, c.y, w, ch, 14, face ? '#ffffff' : '#1f5a2a', c.done ? '#f5c400' : 'rgba(255,255,255,.7)', c.done ? 5 : 3);
+    const g = Mini.ctx(), all = this.cards.every(k => k.done);
+    this.cards.forEach((c, i) => {
+      const sx = Math.abs(1 - 2 * c.f), w = cw * Math.max(.04, sx), face = c.f > .5;
+      // A found pair jumps; once they're all found, the cards dance in a wave.
+      const dy = -(c.pop || 0) * ch * .12 - (all && !reduced ? Math.max(0, Math.sin(this.clock * 6 - i * .5)) * ch * .1 : 0), y = c.y + dy;
+      const x = c.x + (cw - w) / 2;
+      if (c.done){                                 // a gold glow round a found pair
+        const gl = g.createRadialGradient(c.x + cw / 2, y + ch / 2, Math.min(cw, ch) * .3, c.x + cw / 2, y + ch / 2, Math.max(cw, ch) * .75);
+        gl.addColorStop(0, 'rgba(255,215,0,.35)'); gl.addColorStop(1, 'rgba(255,215,0,0)');
+        g.fillStyle = gl; g.fillRect(c.x - cw * .3, y - ch * .3, cw * 1.6, ch * 1.6);
+      }
+      Mini.rect(x, y, w, ch, 14, face ? '#ffffff' : '#1f5a2a', c.done ? '#f5c400' : 'rgba(255,255,255,.7)', c.done ? 5 : 3);
       if (sx < .15) return;
       if (face){ // squash the shirt with the card as it turns
-        Mini.flipX(c.x + cw / 2, sx, () => Mini.shirtAt(c.team, c.x + cw / 2, c.y + ch / 2, Math.min(cw, ch) * .82));
-      } else Mini.ballAt(c.x + cw / 2, c.y + ch / 2, Math.min(cw, ch) * .18 * sx);
+        Mini.flipX(c.x + cw / 2, sx, () => Mini.shirtAt(c.team, c.x + cw / 2, y + ch / 2, Math.min(cw, ch) * .82));
+      } else Mini.ballAt(c.x + cw / 2, y + ch / 2, Math.min(cw, ch) * .18 * sx);
     });
   }
 };
