@@ -252,7 +252,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 /* ---------- prize match ---------- */
 #pong,#mini{position:fixed;inset:0;z-index:20;background:var(--bg);touch-action:none;overscroll-behavior:none}
 #pc,#mc{display:block;width:100%;height:100%;touch-action:none}
-#mc{position:relative}
+#pc,#mc{position:relative}
 #m3d{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 #m3d[hidden]{display:none}
 #pexit,#mexit{position:absolute;left:10px;transform:translateY(-50%);background:rgba(0,0,0,.25)}
@@ -1941,6 +1941,9 @@ const Pong = (() => {
   const score = {top:0, bot:0};
   const keys = new Set(), touches = new Map();
   let padW, padH, padWEff, goalW, r;
+  // For the 3-D picture: when each side's keeper (k) and strikers (s) last kicked, and who scored last.
+  const kicks = { top:{k:-9, s:-9}, bot:{k:-9, s:-9} };
+  let lastGoal = 'bot';
 
   function dims(){
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -2009,6 +2012,7 @@ const Pong = (() => {
     pads.bot.team = S.team; pads.top.team = awayTeam();
     score.top = score.bot = 0; matchT = 0;
     show('pong'); audio(); dims();
+    G3.mount($('#pong')); G3.load();       // the 3-D picture, when it's ready (the flat one until then, or if it can't load)
     pads.top.x = pads.bot.x = W/2;
     makeMates();
     solo = false; state = 'choose'; syncControls();
@@ -2056,7 +2060,7 @@ const Pong = (() => {
     };
   }
   function scored(side){
-    state = 'goal'; score[side]++; cheer();
+    state = 'goal'; score[side]++; lastGoal = side; cheer();
     const team = pads[side].team;
     if (score[side] >= WIN){
       state = 'over';
@@ -2098,7 +2102,7 @@ const Pong = (() => {
         const bx = p.x + k * rowGap;
         if (Math.abs(ball.x - bx) <= rowWEff/2 + r){
           ball.y = p.oy + dir * (padH/2 + r);
-          hit(bx, rowWEff, dir);
+          hit(bx, rowWEff, dir); kicks[side].s = performance.now() / 1000;
           return true;
         }
       }
@@ -2332,10 +2336,10 @@ const Pong = (() => {
     const rodHit = variant === 'foosball' ? rods() : variant === 'squad' ? outfieldHits() : false;
     const b = pads.bot, t = pads.top;
     if (!rodHit && ball.vy > 0 && ball.y + r >= b.y - padH/2 && ball.y - r <= b.y + padH/2 && Math.abs(ball.x - b.x) <= padWEff/2 + r){
-      ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1);
+      ball.y = b.y - padH/2 - r; hit(b.x, padWEff, -1); kicks.bot.k = performance.now() / 1000;
     }
     if (!rodHit && ball.vy < 0 && ball.y - r <= t.y + padH/2 && ball.y + r >= t.y - padH/2 && Math.abs(ball.x - t.x) <= padWEff/2 + r){
-      ball.y = t.y + padH/2 + r; hit(t.x, padWEff, 1);
+      ball.y = t.y + padH/2 + r; hit(t.x, padWEff, 1); kicks.top.k = performance.now() / 1000;
     }
     const inMouth = Math.abs(ball.x - W/2) < goalW/2 - r * .3;
     if (ball.y - r <= 0){ if (inMouth) return scored('bot'); ball.y = r; ball.vy = Math.abs(ball.vy); thud(); }
@@ -2493,7 +2497,15 @@ const Pong = (() => {
     g.fillText(String(value), 0, 2);
     g.restore();
   }
+  // What the 3-D picture reads (Pitch3D only draws; it never changes any of this).
+  const view = {
+    pads, men, ball, score, kicks,
+    get variant(){ return variant; }, get solo(){ return solo; }, get mates(){ return mates; }, get lastGoal(){ return lastGoal; },
+    get W(){ return W; }, get H(){ return H; }, get r(){ return r; }, get manR(){ return manR; }, get padH(){ return padH; },
+    get padWEff(){ return padWEff; }, get rowWEff(){ return rowWEff; }, get rowGap(){ return rowGap; }, get goalW(){ return goalW; }
+  };
   function draw(){
+    if (Pitch3D.draw(view, g)){ drawScore('top', score.top); drawScore('bot', score.bot); return; }
     const cs = getComputedStyle(document.documentElement);
     const p1 = cs.getPropertyValue('--pitch').trim() || '#2f7d3a', p2 = cs.getPropertyValue('--pitch2').trim() || '#378a42';
     const band = H / 10;
@@ -2725,7 +2737,7 @@ const Mini = (() => {
   function start(gameObj, cb, gameKey){
     if (S.locked) return;
     game = gameObj; after = cb; key = gameKey; tok++; confirming = false;
-    $('#m3d').hidden = true;   // the 3-D layer under the canvas (bowling); a game that uses it turns it back on
+    G3.mount($('#mini'));      // the 3-D layer under the canvas, hidden; a game that uses it turns it back on
     show('mini'); audio(); dims();
     Fx.reset(); game.setup(W, H);
     running = false; // held until the intro clears, so nothing moves before the child can play
@@ -5405,15 +5417,22 @@ const G3 = (() => {
     if (w !== W || h !== H || d !== dpr){ W = w; H = h; dpr = d; R.setPixelRatio(d); R.setSize(w, h, false); }
     return W > 0 && H > 0;
   }
+  // The one 3-D canvas moves to whichever overlay is playing (#mini, or #pong for the football
+  // games), always underneath that overlay's 2-D canvas. Moving it keeps its WebGL context.
+  function mount(host){
+    const c = $('#m3d');
+    if (c.parentNode !== host) host.insertBefore(c, host.firstChild);
+    c.hidden = true;
+  }
   // Builds a scene module's scene the first time it's drawn; a failure there falls back to 2-D.
   function once(mod){
     if (mod.built) return true;
     try { mod.build(); mod.built = true; return true; } catch(e){ fail(); return false; }
   }
   // Draws, then clears the 2-D canvas for the game to draw its overlay on.
-  function render(scene, cam){
+  function render(scene, cam, g2){
     try { R.render(scene, cam); } catch(e){ fail(); return false; }
-    const g = Mini.ctx(); g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height); g.restore();
+    const g = g2 || Mini.ctx(); g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height); g.restore();
     return true;
   }
   // A camera looking straight down -z from `pos`, with the picture shifted so the horizon sits at
@@ -5646,7 +5665,7 @@ const G3 = (() => {
     }
     if (opts.gloves){
       const glove = std({ color: 0xb6f000, roughness: .6 });
-      [armL, armR].forEach(a => a.add(mesh(new T.SphereGeometry(.075, 14, 10), glove, 0, -.43, 0)));
+      [armL, armR].forEach(a => { a.glove = mesh(new T.SphereGeometry(.075, 14, 10), glove, 0, -.43, 0); a.add(a.glove); });
     }
     return { root, body, legL, legR, armL, armR, shirt, trim, hair, held, team: null };
   }
@@ -5665,7 +5684,7 @@ const G3 = (() => {
     b.hair.color.set(adult ? 0x2a1d14 : 0x4a3020);
   }
 
-  return { load, begin, once, render, aim, env, fail, paint, rnd, std, mesh, ballMap, dressBall, shirtTex,
+  return { load, begin, once, render, mount, aim, env, fail, paint, rnd, std, mesh, ballMap, dressBall, shirtTex,
     particles, emit, burst, stepParticles, whizz, person, dress, RAINBOW,
     get T(){ return T; }, get R(){ return R; }, get W(){ return W; }, get H(){ return H; }, tex };
 })();
@@ -6424,6 +6443,319 @@ const Goal3D = (() => {
     tiers.forEach((tr, i) => { tr.position.y = tr.base + (partying ? Math.abs(Math.sin(t * 9 + i * 1.3)) * .25 : Math.sin(t * 1.5 + i) * .02); });
     boards.material.map.offset.x = (t * (partying ? .15 : .03)) % 1;
     return G3.render(scene, cam);
+  }
+  const mod = { build, draw };
+  return mod;
+})();
+
+/* ---------- keepers, foosball and three-a-side in 3-D ---------- */
+// The `Pong` games' picture in 3-D (see G3): a floodlit pitch seen from above, with real goals and
+// nets, the players standing up in their kits and casting shadows, a football that rolls, and for
+// foosball a table with metal rods and moulded figures that swing when they kick. It only draws:
+// `Pong` still owns the flow, the physics and every touch, all in screen pixels, and its 2-D
+// canvas still carries the scores and the messages on top. So the camera looks straight down, D
+// pixels above the pitch, and the pitch (z = 0) *is* the screen, one unit to a pixel: a fair view
+// for two players across the table, and a finger still lands exactly on the player it moves.
+// World x is across the screen from its centre, y is up the screen, z is up off the grass.
+// Anything off the ground is placed through P(), so it still appears where the game thinks it is.
+const Pitch3D = (() => {
+  const { paint, rnd, std, mesh, particles, emit, burst, stepParticles, RAINBOW } = G3;
+  let T = null, scene, cam, sun, grass, ball, spark, ring = {}, keeper = {}, man = {}, mate = [], fig = { top: [], bot: [] }, rods = [], goals = [];
+  let W = 0, H = 0, D = 1000, fpx = 1, key = '', last = 0, scoreKey = '', q, ax, prev = null;
+  const P = (x, y, z) => [(x - W / 2) * (D - z) / D, (H / 2 - y) * (D - z) / D, z];
+  const at = (o, x, y, z) => { const p = P(x, y, z); o.position.set(p[0], p[1], p[2]); };
+
+  /* ----- textures ----- */
+  // The grass (or the table's felt): mown stripes with a little texture, and the same markings as
+  // the flat game - the border, halfway line, centre circle and both boxes.
+  function pitchTex(v){
+    const k = 2, foos = v.variant === 'foosball';
+    return paint(Math.round(W * k), Math.round(H * k), (g, w, h) => {
+      g.scale(k, k);
+      const band = H / 10;
+      for (let i = 0; i < 10; i++){
+        g.fillStyle = foos ? (i % 2 ? '#2f8f52' : '#2a8449') : (i % 2 ? '#37913f' : '#2e8237');
+        g.fillRect(0, i * band, W, band + 1);
+      }
+      const r = rnd(17);
+      for (let i = 0; i < W * H / 40; i++){ g.fillStyle = `rgba(${r() < .5 ? '10,50,15' : '150,210,120'},.12)`; g.fillRect(r() * W, r() * H, 1, 2); }
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 3;
+      g.strokeRect(3, 3, W - 6, H - 6);
+      g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+      g.beginPath(); g.arc(W / 2, H / 2, Math.min(W, H) * .15, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(W / 2, H / 2, 4, 0, 7); g.fill();
+      const bw = Math.min(W - 20, v.goalW * 1.7), bh = H * .13;
+      g.strokeRect(W / 2 - bw / 2, 0, bw, bh); g.strokeRect(W / 2 - bw / 2, H - bh, bw, bh);
+      if (foos){                                   // the table's wooden edge
+        g.strokeStyle = '#6b4423'; g.lineWidth = 6; g.strokeRect(0, 0, W, H);
+      }
+    });
+  }
+  function netTex(){
+    return paint(32, 32, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, w - 3, h - 3); });
+  }
+
+  /* ----- the scene ----- */
+  function build(){
+    T = G3.T; q = new T.Quaternion(); ax = new T.Vector3();
+    scene = new T.Scene(); scene.background = new T.Color(0x1d5a28);
+    cam = new T.PerspectiveCamera();
+    G3.env(scene, 0x24305a, 2.4, .5);
+    scene.add(new T.HemisphereLight(0xe4ecff, 0x2a4a2a, 1.05));
+    sun = new T.DirectionalLight(0xfff4e0, 2.1);
+    sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -.0008; sun.shadow.normalBias = .5;
+    scene.add(sun, sun.target);
+    grass = new T.Mesh(new T.PlaneGeometry(1, 1), std({ roughness: .95 })); grass.receiveShadow = true; scene.add(grass);
+    ball = new T.Mesh(new T.SphereGeometry(1, 28, 20), std({ map: G3.ballMap('foot'), roughness: .35 }));
+    ball.castShadow = true; scene.add(ball);
+    spark = particles(scene, 700, 15);
+    spark.pts.material.blending = T.NormalBlending;   // glowing (additive) sparks vanish on bright grass
+    // A yellow ring at the feet of the man each player moves, as in the flat game.
+    ['top', 'bot'].forEach(s => {
+      const m = new T.Mesh(new T.TorusGeometry(1, .14, 8, 40), new T.MeshBasicMaterial({ color: 0xf5c400 }));
+      scene.add(m); ring[s] = m;
+    });
+  }
+  // A person (G3.person) stood up on the pitch. Seen from straight above a person is only a head
+  // and shoulders, so everyone leans back towards the top of the screen by TILT, as if the camera
+  // were behind the bottom goal: the bottom team is seen from behind, the top team from the
+  // front, the way the flat game drew them. Their feet stay exactly where the game puts them.
+  // Groups, outside in: where they stand, the lean, which way they face, and the person stood up
+  // (their +y up out of the grass, facing up the screen). A soft shadow sits under their feet,
+  // since a real one from a leaning body would fall the wrong way.
+  const TILT = .9;
+  function stand(opts){
+    const b = G3.person(opts), outer = new T.Group(), lean = new T.Group(), yaw = new T.Group();
+    b.root.rotation.x = Math.PI / 2; lean.rotation.x = -TILT;
+    yaw.add(b.root); lean.add(yaw); outer.add(lean); scene.add(outer);
+    b.root.traverse(o => { o.castShadow = false; });
+    b.blob = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: G3.tex.soft, transparent: true, depthWrite: false }));
+    scene.add(b.blob);
+    b.outer = outer; b.yawG = yaw; b.yaw = 0;
+    return b;
+  }
+  // Stands a person so that the point h up their body (unscaled, h * sc pixels up) lands on screen
+  // at (x, y): that's the shoulders for a keeper's arms, the hips for a man's reach.
+  function place(b, x, y, h, sc){
+    const up = h * sc, p = P(x, y, up * Math.cos(TILT));
+    b.outer.position.set(p[0], p[1] - up * Math.sin(TILT), 0); b.outer.scale.setScalar(sc);
+    b.blob.position.set(b.outer.position.x, b.outer.position.y, .6); b.blob.scale.set(sc * .7, sc * .45, 1);
+    b.blob.visible = b.outer.visible;
+  }
+  // A moulded table-football figure, one unit tall, facing up the screen, hanging from the rod at
+  // ROD of its height so it can swing round it when it kicks, with arms out along the rod as wide as it blocks.
+  const ROD = .62;
+  function figure(withArms){
+    const outer = new T.Group(), swing = new T.Group(); outer.add(swing); swing.position.z = ROD;
+    const shirt = std({ roughness: .45, metalness: .05 }), skin = std({ color: 0xf1c79b, roughness: .5 });
+    const dark = std({ color: 0x23232e, roughness: .5 });
+    const add = (m, z) => { m.position.z = z - ROD; m.castShadow = true; swing.add(m); return m; };
+    const body = new T.CylinderGeometry(.27, .22, .42, 20); body.rotateX(Math.PI / 2);
+    const torso = add(new T.Mesh(body, shirt), .66);
+    const legs = add(new T.Mesh(new T.BoxGeometry(.36, .2, .34), dark), .3);
+    const feet = add(new T.Mesh(new T.BoxGeometry(.4, .34, .1), dark), .06); feet.position.y = .06;
+    const head = add(new T.Mesh(new T.SphereGeometry(.15, 16, 12), skin), .98);
+    let arms = null;
+    if (withArms){
+      const cg = new T.CapsuleGeometry(.09, 1, 6, 12); cg.rotateZ(Math.PI / 2);
+      arms = add(new T.Mesh(cg, shirt), .7);
+    }
+    scene.add(outer);
+    return { outer, swing, shirt, torso, legs, feet, head, arms, team: null };
+  }
+  function dressFig(f, team){
+    if (f.team === team) return;
+    f.team = team;
+    const st = PATTERNED[team];
+    f.shirt.map = st ? G3.shirtTex(team) : null; f.shirt.color.set(st ? 0xffffff : TEAMS[team].main); f.shirt.needsUpdate = true;
+  }
+  // A goal: two posts and a bar standing on the goal line, and a net back to the end of the screen.
+  function goal(top, v){
+    const grp = new T.Group(), gw = v.goalW, gh = H * .035, ht = Math.min(gw * .24, H * .05), pr = Math.max(2.5, gw * .018);
+    const white = std({ color: 0xffffff, roughness: .3, metalness: .1 });
+    const ly = top ? gh : H - gh, ey = top ? 0 : H;   // the goal line and the end of the screen
+    const post = new T.CylinderGeometry(pr, pr, ht, 12); post.rotateX(Math.PI / 2);
+    [-1, 1].forEach(k => { const p = mesh(post, white); at(p, W / 2 + k * gw / 2, ly, ht / 2); p.position.z = ht / 2; p.castShadow = true; grp.add(p); });
+    const bar = new T.CylinderGeometry(pr, pr, gw + pr * 2, 12); bar.rotateZ(Math.PI / 2);
+    const b = mesh(bar, white); at(b, W / 2, ly, ht); b.castShadow = true; grp.add(b);
+    // The net: a roof from the bar back to the end of the screen, and the two sides.
+    const nt = netTex(); nt.wrapS = nt.wrapT = T.RepeatWrapping;
+    const nm = (rx, ry) => { const t = nt.clone(); t.needsUpdate = true; t.repeat.set(rx, ry); return new T.MeshBasicMaterial({ map: t, transparent: true, alphaTest: .3, side: T.DoubleSide, opacity: .85 }); };
+    const depth = Math.abs(ly - ey);
+    const roof = new T.Mesh(new T.PlaneGeometry(gw, depth), nm(gw / 9, depth / 9));
+    const yc = P(W / 2, (ly + ey) / 2, ht);
+    roof.position.set(yc[0], yc[1], ht * .85); grp.add(roof);
+    const sg = new T.PlaneGeometry(depth, ht); sg.rotateX(Math.PI / 2); sg.rotateZ(Math.PI / 2);
+    [-1, 1].forEach(k => {
+      const side = new T.Mesh(sg, nm(depth / 9, ht / 9));
+      const p = P(W / 2 + k * gw / 2, (ly + ey) / 2, ht / 2);
+      side.position.set(p[0], p[1], ht / 2); grp.add(side);
+    });
+    const shade = new T.Mesh(new T.PlaneGeometry(gw, depth), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .18, depthWrite: false }));
+    shade.position.set(0, P(W / 2, (ly + ey) / 2, 0)[1], .5); grp.add(shade);
+    scene.add(grp);
+    return grp;
+  }
+  // Everything that depends on the size of the screen (or the game): the camera, the light, the
+  // grass and its markings, the goals and the rods.
+  function layout(v){
+    W = v.W; H = v.H; D = H * 1.05;
+    cam.fov = 2 * Math.atan(H / 2 / D) * 180 / Math.PI; cam.aspect = W / H; cam.near = D * .2; cam.far = D * 2;
+    cam.position.set(0, 0, D); cam.rotation.set(0, 0, 0); cam.updateProjectionMatrix();
+    fpx = 2 * D / H;
+    sun.position.set(-W * .22, H * .25, D * 1.2); sun.target.position.set(0, 0, 0);
+    const e = Math.max(W, H) * .65;
+    Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, near: D * .2, far: D * 2.5 });
+    sun.shadow.camera.updateProjectionMatrix();
+    if (grass.material.map) grass.material.map.dispose();
+    grass.material.map = pitchTex(v); grass.material.needsUpdate = true; grass.scale.set(W, H, 1);
+    goals.forEach(g => scene.remove(g)); goals = [goal(true, v), goal(false, v)];
+    rods.forEach(r => scene.remove(r)); rods = [];
+    if (v.variant === 'foosball'){
+      const metal = std({ color: 0xd8dde6, roughness: .25, metalness: .9 }), rg = new T.CylinderGeometry(1, 1, W * 1.4, 14);
+      rg.rotateZ(Math.PI / 2);
+      ['top', 'bot'].forEach(s => [v.pads[s].y, v.pads[s].oy].forEach(y => {
+        const r = new T.Mesh(rg, metal); const rr = Math.max(2.5, v.padH * .17); r.scale.set(1, rr, rr);
+        r.castShadow = true; r.userData.y = y; scene.add(r); rods.push(r);
+      }));
+    }
+  }
+
+  /* ----- posing ----- */
+  // Turns a person smoothly towards an angle (0 = facing up the screen).
+  function turn(b, a, dt){
+    let d = a - b.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    b.yaw += d * Math.min(1, dt * 10); b.yawG.rotation.z = b.yaw;
+  }
+  function keeperPose(b, p, side, v, dt, t){
+    const sc = (v.variant === 'squad' ? v.manR * 3 : Math.max(v.padH * 3, W * .12)) / 1.22, sh = .93 * sc;
+    const lift = (D - sh * Math.cos(TILT)) / D;    // his shoulders are off the ground, so they're drawn at P()
+    G3.dress(b, p.team, true);
+    const moved = p.x - (b.lastX ?? p.x); b.lastX = p.x;
+    b.lean = (b.lean || 0) * .85 + Math.max(-.3, Math.min(.3, moved * .05)) * .15;
+    b.step = (b.step || 0) + Math.abs(moved) * .2;
+    place(b, p.x, p.y, .93, sc);
+    turn(b, side === 'top' ? Math.PI : 0, 1);
+    b.body.rotation.z = -b.lean;
+    // Arms straight out to each side, exactly as wide as he blocks, gloves on the ends.
+    const reach = Math.max(.2, (v.padWEff / 2 * lift / sc - .2) / .43);
+    [[b.armL, -1], [b.armR, 1]].forEach(([a, k]) => {
+      a.rotation.set(0, 0, k * Math.PI / 2); a.scale.y = reach;
+      if (a.glove) a.glove.scale.set(1, 1 / reach, 1);
+    });
+    const sw = Math.sin(b.step) * .25;
+    b.legL.rotation.set(sw, 0, -.25); b.legR.rotation.set(-sw, 0, .25);
+    b.body.position.y = -.08 + Math.abs(Math.sin(t * 3)) * .01;
+  }
+  function manPose(b, m, team, v, dt){
+    const sc = v.manR * 2.9 / 1.22;
+    G3.dress(b, team, m.you);
+    place(b, m.x, m.y, .5, sc);
+    const dx = m.x - (b.lastX ?? m.x), dy = m.y - (b.lastY ?? m.y); b.lastX = m.x; b.lastY = m.y;
+    const attack = m.side === 'bot' ? 0 : Math.PI;
+    // Faces the way he's running, and back up the pitch when he stops; turns to the ball to kick.
+    let a = Math.hypot(dx, dy) > .4 ? Math.atan2(-dx, -dy) : attack;
+    if (m.kick > 0) a = Math.atan2(-(v.ball.x - m.x), -(v.ball.y - m.y));
+    turn(b, a, dt);
+    const sw = Math.sin(m.phase) * .8;
+    b.legL.rotation.x = sw; b.legR.rotation.x = -sw;
+    b.armL.rotation.set(-sw * .7, 0, -.15); b.armR.rotation.set(sw * .7, 0, .15);
+    if (m.kick > 0){ b.legR.rotation.x = 1.3 * Math.sin(Math.min(1, (.18 - m.kick) / .18) * Math.PI); }
+    b.body.position.y = Math.abs(Math.sin(m.phase)) * .04;
+  }
+  // A figure on a rod: slides with the rod, and swings round it for a moment after a kick.
+  function figPose(f, team, x, y, w, h, side, kicked, keeperW, t){
+    dressFig(f, team);
+    const g = P(x, y, h * ROD); f.outer.position.set(g[0], g[1], 0);
+    f.outer.scale.set(h, h, h); f.outer.rotation.z = side === 'top' ? Math.PI : 0;
+    // A normal-shaped body; any more width than that is arms along the rod, so what you see
+    // is exactly as wide as what blocks.
+    const bw = Math.min(1.5, Math.max(1, w / (.54 * h)));
+    f.torso.scale.x = bw; f.legs.scale.x = f.feet.scale.x = bw * .9;
+    if (f.arms){ f.arms.visible = keeperW > .54 * h * bw; f.arms.scale.x = Math.max(.2, keeperW / h / 1.18); }
+    const k = t - kicked;
+    f.swing.rotation.x = k >= 0 && k < .35 ? Math.sin(k / .35 * Math.PI) * 1.1 : Math.sin(t * 2 + x * .05) * .03;
+  }
+
+  /* ----- goals and the party after ----- */
+  function events(v, dt, t){
+    const sk = `${v.score.top}-${v.score.bot}`;
+    if (sk !== scoreKey){
+      const was = scoreKey; scoreKey = sk;
+      if (was && v.score.top + v.score.bot > 0){
+        const top = v.lastGoal === 'bot';            // bottom scored: the ball's in the top net
+        const gp = P(W / 2, top ? H * .08 : H * .92, 30), kit = TEAMS[v.pads[v.lastGoal].team];
+        burst(spark, gp[0], gp[1], gp[2], 160, W * .55, [kit.main, kit.trim, '#f5c400', '#ffffff'], 1.1, 0);
+        for (let i = 0; i < 5; i++) setTimeout(() => {
+          if (!scene) return;
+          const p = P(W * (.15 + Math.random() * .7), H * (.15 + Math.random() * .7), 120);
+          burst(spark, p[0], p[1], p[2], 70, W * .35, [RAINBOW[i % 7], RAINBOW[(i + 3) % 7], '#ffffff'], 1, 0);
+          G3.whizz();
+        }, 250 + i * 260);
+      }
+    }
+    stepParticles(spark, dt, fpx);
+    // Spent sparks go under the grass: with solid (not glowing) sparks they'd show as black dots.
+    for (let i = 0; i < spark.n; i++) if (spark.life[i] <= 0) spark.pos[i * 3 + 2] = -50;
+  }
+
+  // Draws this frame. Returns false when there's no 3-D picture.
+  function draw(v, g2){
+    if (!G3.begin() || !G3.once(mod)) return false;
+    const t = performance.now() / 1000;
+    let dt = t - last; last = t; dt = dt >= 0 && dt < 1 ? Math.min(dt, .05) : 0;   // a slow frame slows the sparks, never freezes them
+    const k = `${v.W}x${v.H}:${v.variant}:${v.goalW}`;
+    if (k !== key){ key = k; layout(v); prev = null; }
+    // The ball: sat on the grass, rolling the way it's going.
+    ball.scale.setScalar(v.r); at(ball, v.ball.x, v.ball.y, v.r);
+    if (prev){
+      const dx = v.ball.x - prev[0], dy = -(v.ball.y - prev[1]), d = Math.hypot(dx, dy);
+      if (d > .01 && d < W * .3){ ax.set(-dy / d, dx / d, 0); q.setFromAxisAngle(ax, d / v.r); ball.quaternion.premultiply(q); }
+    }
+    prev = [v.ball.x, v.ball.y];
+    const vr = v.variant;
+    // Keepers: people in the classic game and three-a-side, figures on rods in foosball.
+    ['top', 'bot'].forEach(s => {
+      const p = v.pads[s];
+      if (vr === 'foosball'){
+        if (keeper[s]) keeper[s].outer.visible = keeper[s].blob.visible = false;
+        if (!fig[s].length) fig[s] = [figure(true), figure(true), figure(true), figure(true)];
+        const h = v.padH * 2.7;
+        fig[s].forEach(f => f.outer.visible = true);
+        figPose(fig[s][0], p.team, p.x, p.y, Math.min(v.padWEff, h * .55), h, s, v.kicks[s].k, v.padWEff, t);
+        for (let i = -1; i <= 1; i++) figPose(fig[s][i + 2], p.team, p.x + i * v.rowGap, p.oy, v.rowWEff, h, s, v.kicks[s].s, v.rowWEff, t);
+      } else {
+        fig[s].forEach(f => f.outer.visible = false);
+        if (!keeper[s]){
+          keeper[s] = stand({ face: true, gloves: true });
+          // a keeper's jersey has long sleeves, and his arms are what saves, so they're thicker
+          [keeper[s].armL, keeper[s].armR].forEach(a => { a.children[0].material = keeper[s].shirt; a.children[0].scale.set(1.5, 1, 1.5); });
+        }
+        keeper[s].outer.visible = true;
+        keeperPose(keeper[s], p, s, v, dt, t);
+      }
+    });
+    rods.forEach(r => { const p = P(W / 2, r.userData.y, v.padH * 2.7 * ROD); r.position.set(p[0], p[1], p[2]); });
+    // Three-a-side: the two men on the end of a finger and the two team-mates.
+    const squad = vr === 'squad';
+    ['top', 'bot'].forEach(s => {
+      if (squad && !man[s]) man[s] = stand();
+      if (man[s]) man[s].outer.visible = man[s].blob.visible = squad;
+      const you = squad && !(v.solo && s === 'top');
+      ring[s].visible = you;
+      if (!squad) return;
+      const m = v.men[s];
+      manPose(man[s], m, v.pads[s].team, v, dt);
+      if (you){ ring[s].position.set(man[s].outer.position.x, man[s].outer.position.y, 1.2); ring[s].scale.set(v.manR * .95, v.manR * .6, v.manR * .6); }
+    });
+    v.mates.forEach((m, i) => {
+      if (!mate[i]) mate[i] = stand();
+      mate[i].outer.visible = mate[i].blob.visible = squad;
+      if (squad) manPose(mate[i], m, v.pads[m.side].team, v, dt);
+    });
+    mate.forEach((b, i) => { if (i >= v.mates.length) b.outer.visible = b.blob.visible = false; });
+    events(v, dt, t);
+    return G3.render(scene, cam, g2);
   }
   const mod = { build, draw };
   return mod;
