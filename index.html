@@ -272,6 +272,7 @@ button:focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
 #pmsg .box,#mmsg .box{pointer-events:auto;background:rgba(18,48,26,.82);border-radius:26px;padding:20px 22px;max-width:min(90vw,420px)}
 #pmsg .say,#mmsg .say{font-size:clamp(40px,12vw,80px);font-weight:800;line-height:1;text-shadow:0 5px 0 rgba(0,0,0,.3)}
 #pmsg .small,#mmsg .small{font-size:22px;margin:8px 0 0}
+#pmsg .pick2{display:grid;gap:14px;margin-top:16px}
 #pmsg .box .big,#pmsg .box .plain,#mmsg .box .big,#mmsg .box .plain{margin-top:12px}
 
 /* ---------- prize picker / trophy cabinet ---------- */
@@ -1925,7 +1926,7 @@ const Pong = (() => {
   let W, H, dpr, raf = 0, last = 0, state = 'idle', tok = 0, after = null, confirming = false;
   const WIN = 3;
   const MIN_PAD_SCALE = .5, SHRINK_PER_HIT = .09;
-  let fullSpeedStreak = 0, variant = 'classic';
+  let fullSpeedStreak = 0, variant = 'classic', solo = false;
   let rowGap = 0, rowW = 0, rowWEff = 0; // foosball outfield rods
   // Three-a-side: one outfield player each on the end of a finger, one AI team-mate each
   // penned into a strip of its own half, and an AI keeper on each line.
@@ -1969,8 +1970,12 @@ const Pong = (() => {
   // seconds of actual play, which is roughly two thirds of the clock on the wall.
   const KEEP_HOLD = 35, KEEP_SHRINK = 50, KEEP_MIN = .22;
   let matchT = 0;
+  // Full ball speed in three-a-side, in screen heights a second. It was 1.0; the child asked for
+  // the ball to move faster, so it's 20% up. The men's running pace (RUN) and the serve (base)
+  // are fractions of it, so they come up with it and the man still runs slower than the ball.
+  const SQUAD_PACE = 1.2;
   const pace = () => variant === 'squad' ? PACE_FROM + (1 - PACE_FROM) * Math.min(1, matchT / RAMP) : 1;
-  const maxSpeed = () => H * (variant === 'squad' ? 1.00 * pace() : 1.05);
+  const maxSpeed = () => H * (variant === 'squad' ? SQUAD_PACE * pace() : 1.05);
   const base = () => variant === 'squad' ? maxSpeed() * .45 : H * .36;
   // The one number three-a-side turns on: a man must run SLOWER than a kicked ball. If he
   // doesn't, whoever is stood on the ball simply wins it straight back, both players end up
@@ -2006,18 +2011,31 @@ const Pong = (() => {
     show('pong'); audio(); dims();
     pads.top.x = pads.bot.x = W/2;
     makeMates();
-    syncControls();
+    solo = false; state = 'choose'; syncControls();
+    const title = variant === 'foosball' ? 'Foosball' : variant === 'squad' ? 'Three-a-side' : 'Prize match';
+    speak(`${title}! One player or two?`);
+    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">One player or two?</p>
+      <div class="pick2"><button class="big" id="pOne">🏃 1 player</button><button class="big" id="pTwo">🧑‍🤝‍🧑 2 players</button></div>`);
+    const t = tok;
+    $('#pOne').onclick = () => { if (t === tok) begin(true); };
+    $('#pTwo').onclick = () => { if (t === tok) begin(false); };
+    cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
+  }
+  // After the 1-or-2 choice: the instructions, then kick-off. In 1 player the computer plays the
+  // far side (see aiMove) and the child can steer from anywhere on the screen.
+  function begin(one){
+    solo = one; state = 'intro'; audio(); syncControls(); ai.react = 0;
     const how = S.controls === 'buttons' ? 'Press the arrows' : 'Slide your finger';
     const who = variant === 'foosball' ? 'your keeper and your strikers' : variant === 'squad' ? 'your player' : 'your keeper';
     const title = variant === 'foosball' ? 'Foosball' : variant === 'squad' ? 'Three-a-side' : 'Prize match';
     const extra = variant !== 'squad' ? ''
       : (S.controls === 'buttons' ? ' He runs up and down to the ball on his own.' : ' He can run anywhere on the pitch.') +
         ' Your keeper and your team-mate play by themselves.';
-    speak(`${title}! ${how} to move ${who}.${extra} First to three goals wins!`);
-    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}.${extra} First to ${WIN} wins!</p>`);
+    const vs = solo ? ' You play the computer.' : '';
+    speak(`${how} to move ${who}.${extra}${vs} First to three goals wins!`);
+    say(`<div class="say" style="font-size:clamp(34px,9vw,56px)">${title}</div><p class="small">${how} to move ${who}.${extra}${vs} First to ${WIN} wins!</p>`);
     const t = tok;
     setTimeout(() => { if (t === tok) countdown(Math.random() < .5 ? 1 : -1); }, 2600);
-    cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
   }
   function stop(){
     tok++; state = 'idle'; confirming = false; cancelAnimationFrame(raf); msg.innerHTML = ''; hush();
@@ -2025,6 +2043,7 @@ const Pong = (() => {
   }
   function askExit(){
     if (confirming || state === 'idle' || state === 'over') return;
+    if (state === 'choose') return stop();
     confirming = true;
     const wasPlaying = state === 'play';
     tok++; state = 'paused';
@@ -2043,9 +2062,12 @@ const Pong = (() => {
       state = 'over';
       awardTrophy(variant === 'classic' ? 'keepers' : variant);
       whistle(.3, .3); whistle(.75, .3); whistle(1.2, .9);
-      speak(`${teamSay(team)} win the prize match!`);
-      confetti(team);
-      msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${teamName(team)} win!</div>
+      // 1 player: if the computer gets there first it's still a great match, and still a trophy
+      const cpu = solo && side === 'top';
+      speak(cpu ? `${teamSay(team)} just won it. What a match! Great playing!` : `${teamSay(team)} win the prize match!`);
+      confetti(cpu ? pads.bot.team : team);
+      msg.innerHTML = `<div class="box"><div class="say" style="font-size:clamp(34px,9vw,56px)">${cpu ? 'What a match!' : teamName(team) + ' win!'}</div>
+        ${cpu ? '<p class="small">So close! Great playing.</p>' : ''}
         <button class="big" id="pback">Back to the menu</button></div>`;
       $('#pback').onclick = stop;
       return;
@@ -2092,7 +2114,7 @@ const Pong = (() => {
       mates.push({ side, you:false, x: W/2, y: 0, rx: 0, wob: 0, cool: 0, kick: 0, kdir: 1, phase: 0 });
     for (const side of ['top','bot'])
       Object.assign(men[side], { x: W/2, y: H * (side === 'bot' ? .68 : .32), tx: W/2, ty: H * (side === 'bot' ? .68 : .32),
-        cool: 0, kick: 0, kdir: 1, phase: 0 });
+        cool: 0, kick: 0, kdir: 1, phase: 0, pace: 1 });
     ['top','bot'].forEach(k => { pads[k].guess = W/2; pads[k].seen = -1; });
     kickLock = 0; lastKicker = null;
     squadDims();
@@ -2124,7 +2146,7 @@ const Pong = (() => {
     for (const side of ['top','bot']){
       const m = men[side];
       m.cool = Math.max(0, m.cool - dt); m.kick = Math.max(0, m.kick - dt);
-      if (S.controls === 'buttons'){
+      if (S.controls === 'buttons' && !(solo && side === 'top')){
         if (keys.has(side === 'top' ? 'a' : 'ArrowLeft')) m.tx -= ks;
         if (keys.has(side === 'top' ? 'd' : 'ArrowRight')) m.tx += ks;
         m.ty = ball.y;
@@ -2133,7 +2155,7 @@ const Pong = (() => {
       m.ty = clamp(m.ty, H * ZONE_LO, H * ZONE_HI);
       const dx = m.tx - m.x, dy = m.ty - m.y, d = Math.hypot(dx, dy);
       if (d < 1) continue;
-      const step = Math.min(run * dt, d);
+      const step = Math.min(run * (m.pace || 1) * dt, d);
       m.x += dx / d * step; m.y += dy / d * step;
       m.phase += step / (manR * .5);
     }
@@ -2175,7 +2197,9 @@ const Pong = (() => {
     const lo = r, hi = W - r, span = 2 * (hi - lo);   // fold the side walls in, so a shot off one is still read
     const t = ((x - lo) % span + span) % span;
     x = lo + (t > hi - lo ? span - t : t);
-    p.guess = x + (Math.random() * 2 - 1) * padW * DIVE_SPREAD;
+    // in 1 player the computer's keeper guesses wider while it's going easy (see aiSkill)
+    const wide = solo && p === pads.top ? mix(1.5, 1, clamp(aiSkill(), 0, 1)) : 1;
+    p.guess = x + (Math.random() * 2 - 1) * padW * DIVE_SPREAD * wide;
   }
   function moveKeepers(dt){
     for (const side of ['top','bot']){
@@ -2221,6 +2245,49 @@ const Pong = (() => {
     }
     return false;
   }
+  /* ----- 1 player: the computer plays the top side ----- */
+  // It plays like a person, not a machine: it only looks at the ball every so often (`react`),
+  // guesses where it's going with an error picked once per shot, and moves at a limited speed.
+  // How good it is (`aiSkill`) depends on the score: it starts at AI_BASE, tries harder for every
+  // goal the child is ahead and eases off for every goal it's ahead itself, so the child usually
+  // wins but has to earn it. Tuned by simulation against a pretend four-year-old (see CLAUDE.md).
+  const AI = { classic: { base: .05, step: .2 }, foosball: { base: -.2, step: .2 }, squad: { base: -.2, step: .2 } };
+  const ai = { react: 0, tx: 0, ty: 0, err: 0, seen: -1 };
+  const mix = (a, b, k) => a + (b - a) * k;
+  function aiSkill(){ const a = AI[variant]; return clamp(a.base + a.step * (score.bot - score.top), -.3, .95); }
+  // Where the ball will cross the line y, folding the side walls in.
+  function landX(y){
+    let x = ball.x + ball.vx * (Math.abs(y - ball.y) / (Math.abs(ball.vy) || 1));
+    const lo = r, hi = W - r, span = 2 * (hi - lo), t = ((x - lo) % span + span) % span;
+    return lo + (t > hi - lo ? span - t : t);
+  }
+  function aiMove(dt){
+    const s = aiSkill();
+    ai.react -= dt;
+    if (variant === 'squad'){
+      const m = men.top;
+      if (ai.react <= 0){
+        ai.react = mix(.45, .18, s) * (.7 + Math.random() * .6);
+        // Runs at the ball, the way a child does, rather than getting goal-side of it - that
+        // made it a far better defender than any four-year-old.
+        const lead = mix(.05, .25, s);
+        ai.tx = ball.x + ball.vx * lead + (Math.random() - .5) * W * mix(.24, .04, s);
+        ai.ty = ball.y + ball.vy * lead;
+      }
+      m.tx = ai.tx; m.ty = ai.ty; m.pace = mix(.62, .96, s);
+      return;
+    }
+    const p = pads.top;
+    if (ai.react <= 0){
+      ai.react = mix(.32, .12, s) * (.7 + Math.random() * .6);
+      if (ball.vy < 0 && state === 'play'){
+        if (ai.seen !== shotId){ ai.seen = shotId; ai.err = (Math.random() * 2 - 1) * padW * mix(1.25, .3, s); }
+        ai.tx = landX(p.y) + ai.err;
+      } else ai.tx = W / 2 + (ball.x - W / 2) * .3;  // otherwise it drifts back to the middle
+    }
+    const sp = W * mix(.55, 1.2, s) * dt;
+    p.x = clamp(p.x + clamp(ai.tx - p.x, -sp, sp), padW / 2, W - padW / 2);
+  }
   function update(dt){
     // the keeper-shrinking rally counter is for the keeper-vs-keeper games; in three-a-side
     // nobody is steering a keeper, so shrinking one would just be unfair
@@ -2231,12 +2298,13 @@ const Pong = (() => {
       ? Math.max(KEEP_MIN, Math.min(1, 1 - (matchT - KEEP_HOLD) / KEEP_SHRINK))
       : Math.max(MIN_PAD_SCALE, 1 - fullSpeedStreak * SHRINK_PER_HIT);
     padWEff = padW * scale; rowWEff = rowW * scale;
+    if (solo) aiMove(dt);
     if (variant === 'squad'){
       kickLock = Math.max(0, kickLock - dt);
       moveMen(dt); moveMates(dt); moveKeepers(dt); // everyone keeps moving between goals too
     } else {
       const ks = W * (S.controls === 'buttons' ? 1.05 : 1.3) * dt;
-      if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks;
+      if (!solo){ if (keys.has('a')) pads.top.x -= ks; if (keys.has('d')) pads.top.x += ks; }
       if (keys.has('ArrowLeft')) pads.bot.x -= ks; if (keys.has('ArrowRight')) pads.bot.x += ks;
       ['top','bot'].forEach(k => pads[k].x = Math.min(Math.max(pads[k].x, padW/2), W - padW/2));
     }
@@ -2416,7 +2484,7 @@ const Pong = (() => {
   function drawScore(side, value){
     g.save();
     g.translate(W - 34, side === 'top' ? H/2 - 36 : H/2 + 36);
-    if (side === 'top') g.rotate(Math.PI);
+    if (side === 'top' && !solo) g.rotate(Math.PI);
     const tm = pads[side].team;
     g.fillStyle = TEAMS[tm].main;
     g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill();
@@ -2466,8 +2534,8 @@ const Pong = (() => {
     const on = S.controls === 'buttons';
     const moves = variant === 'squad' ? 'player' : 'keeper';
     $$('.pbtn').forEach(b => {
-      b.hidden = !on;
       const top = b.classList.contains('tl') || b.classList.contains('tr');
+      b.hidden = !on || (solo && top);
       b.setAttribute('aria-label', `${top ? 'Top' : 'Bottom'} ${moves} ${b.dataset.key.includes('Left') || b.dataset.key === 'a' ? 'left' : 'right'}`);
       const team = b.classList.contains('tl') || b.classList.contains('tr') ? pads.top.team : pads.bot.team;
       Object.keys(TEAMS).forEach(t => b.classList.toggle(t, t === team));
@@ -2498,7 +2566,7 @@ const Pong = (() => {
   function steer(side, x, y){ if (variant === 'squad') aim(side, x, y); else pads[side].x = x; }
   cv.addEventListener('pointerdown', e => {
     if (S.controls === 'buttons') return;
-    const side = variant === 'squad' ? grab(e.clientX, e.clientY) : (e.clientY < H/2 ? 'top' : 'bot');
+    const side = solo ? 'bot' : variant === 'squad' ? grab(e.clientX, e.clientY) : (e.clientY < H/2 ? 'top' : 'bot');
     if (!side) return;
     touches.set(e.pointerId, side); steer(side, e.clientX, e.clientY);
     try { cv.setPointerCapture(e.pointerId); } catch(err) {}
@@ -2508,7 +2576,7 @@ const Pong = (() => {
   addEventListener('keydown', e => { if (!S.locked && !$('#pong').hidden){ keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
   addEventListener('resize', () => { if (!$('#pong').hidden) dims(); });
-  $('#pexit').onclick = () => { if (state === 'over' || state === 'idle') stop(); else askExit(); };
+  $('#pexit').onclick = () => { if (state === 'over' || state === 'idle' || state === 'choose') stop(); else askExit(); };
   addEventListener('beforeunload', e => {
     if (!$('#pong').hidden){ e.preventDefault(); e.returnValue = ''; }
   });
@@ -3139,40 +3207,75 @@ const Crossbar = {
 // Fun on top: "Ready... steady... go!" first (taps don't count until "go"), dust kicked up behind
 // the runners, "Nearly there!" near the end, and a finish tape the winner breaks.
 const Sprint = {
-  title: 'Sprint race', intro: 'Tap tap tap on your side to run to the line!',
-  CHILD_TAPS: 20, GROWN_TAPS: 32, READY: 2.4,
+  title: 'Sprint race', intro: 'Tap tap tap to run to the finish line!',
+  // A 50-metre race, twice the taps it used to be. The grown-up still needs about 1.6 times as
+  // many taps as the child, since an adult taps about twice as fast.
+  CHILD_TAPS: 40, GROWN_TAPS: 64, READY: 2.4, METRES: 50,
+  LEN: 3.4,          // the track is this many screens long; each lane's camera follows its runner
+  // The computer runner (1 player): a steady pace that eases off when it's in front and pushes on
+  // when it's well behind, so a child tapping away wins, but never by a mile.
+  // Simulated (200 races per tapping speed): a child tapping 3 times a second or more always wins,
+  // by a tenth of the track or so; 2.5 a second wins about half; 2 or slower, the computer does.
+  CPU_T: 15, CPU_LEAD: .04, CPU_PUSH: 10, CPU_MAX: 2.6,
   setup(W, H){
     this.W = W; this.H = H;
-    this.teams = [S.team, awayTeam()]; // 0 runs along the bottom, 1 along the top (seen from the far side)
-    this.q = [0, 0]; this.p = [0, 0]; this.phase = [0, 0]; this.over = false;
-    this.cd = 0; this.said = -1; this.nearly = false; this.won = -1; this.tapeT = 0;
+    this.teams = [S.team, awayTeam()]; // 0 runs along the bottom, 1 along the top
+    this.phase = 'choose'; this.solo = false;
+    this.q = [0, 0]; this.p = [0, 0]; this.legs = [0, 0]; this.over = false;
+    this.cd = 0; this.said = -1; this.nearly = false; this.won = -1; this.tapeT = 0; this.cpuRate = 0;
   },
   resize(W, H){ this.W = W; this.H = H; },
+  cards(){
+    const W = this.W, H = this.H, w = Math.min(W * .38, H * .22), h = w * 1.05, gap = Math.min(18, W * .045);
+    return [['solo', W / 2 - w - gap / 2], ['duo', W / 2 + gap / 2]].map(([kind, x]) => ({ kind, x, y: H * .5 - h / 2, w, h }));
+  },
   down(x, y){
+    if (this.phase === 'choose'){
+      const c = this.cards().find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+      if (!c) return;
+      this.solo = c.kind === 'solo'; this.phase = 'race'; ping();
+      speak(this.solo ? 'Race the computer! Tap tap tap anywhere to run.' : 'Tap tap tap on your own side to run.');
+      this.cd = -1.6;                                // a moment for the words before "Ready"
+      return;
+    }
     if (this.over || this.cd < this.READY * 2 / 3) return;   // not before "Go!"
-    const i = y > this.H / 2 ? 0 : 1;
+    const i = this.solo || y > this.H / 2 ? 0 : 1;
     this.q[i] = Math.min(1, this.q[i] + 1 / (i ? this.GROWN_TAPS : this.CHILD_TAPS));
   },
-  // Where a runner's feet are on the screen (the top lane is the bottom one turned round).
-  feet(i){
-    const W = this.W, H = this.H, x = W * .14 + W * .72 * this.p[i], y = H * .78 + Math.min(58, H * .07) * .6;
-    return i ? [W - x, H - y] : [x, y];
+  // How far along the track a lane's camera is, in track pixels: it follows its runner, and
+  // stops at the start and the finish, so both lines land where the old one-screen track had them.
+  geo(){
+    const W = this.W, H = this.H, x0 = W * .14, x1 = W * .86, L = (x1 - x0) * this.LEN;
+    return { W, H, x0, x1, L, s: Math.min(58, H * .07) };
   },
+  cam(i){
+    const { W, x0, x1, L } = this.geo();
+    return Math.min(Math.max(this.p[i] * L - W * .36, -x0), L - x1);
+  },
+  // Where a runner's feet are on the screen (the top lane is the bottom one turned round in
+  // 2 players, and just moved up in 1 player).
+  feet(i){
+    const { H, L, s } = this.geo(), x = this.p[i] * L - this.cam(i), y = this.laneY() + s * .6;
+    if (!i) return [x, y];
+    return this.solo ? [x, y - H * .42] : [this.W - x, H - y];
+  },
+  laneY(){ return this.H * .78; },
   update(dt){
     this.tapeT += dt;
-    if (this.over) return;
+    if (this.over || this.phase !== 'race') return;
     if (this.cd < this.READY){
       this.cd += dt;
       const n = Math.floor(this.cd / (this.READY / 3));
-      if (n !== this.said && n < 3){ this.said = n; speak(['Ready', 'Steady', 'Go!'][n]); if (n === 2) whistle(0, .4); }
+      if (this.cd >= 0 && n !== this.said && n < 3){ this.said = n; speak(['Ready', 'Steady', 'Go!'][n]); if (n === 2) whistle(0, .4); }
       if (this.cd < this.READY * 2 / 3) return;    // "GO!" stays up a moment while they're off
     }
+    if (this.solo) this.q[1] = Math.min(1, this.q[1] + this.cpu(dt) * dt);
     for (const i of [0, 1]){
       const step = (this.q[i] - this.p[i]) * Math.min(1, dt * 9);
-      this.p[i] += step; this.phase[i] += step * 60;
-      if (step > .002){                              // dust kicked up behind
-        const [fx, fy] = this.feet(i);
-        Fx.burst(fx - (i ? -1 : 1) * 10, fy, ['rgba(230,215,180,.8)', 'rgba(200,185,150,.7)'], 1, 50, 6, i ? 60 : -60);
+      this.p[i] += step; this.legs[i] += step * 130;
+      if (step > .001){                              // dust kicked up behind
+        const [fx, fy] = this.feet(i), back = i && !this.solo ? 1 : -1;
+        Fx.burst(fx + back * 10, fy, ['rgba(230,215,180,.8)', 'rgba(200,185,150,.7)'], 1, 50, 6, i && !this.solo ? 60 : -60);
       }
     }
     if (!this.nearly && Math.max(...this.p) > .8){ this.nearly = true; cheer(); speak('Nearly there!'); }
@@ -3185,36 +3288,102 @@ const Sprint = {
       Fx.burst(fx, fy - 40, ['#f5c400', '#ffffff', TEAMS[this.teams[win]].main], 40, 380, 5); Fx.shake(6);
       const t = this.teams[win];
       confetti(t);
-      Mini.finish(`${teamName(t)} win!`, 'What a race! Well run, both of you.', `${teamSay(t)} win! What a race! Well run, both of you.`);
+      if (this.solo && win === 1)                    // the computer got there first: still a great race
+        Mini.finish('What a race!', 'So close! Great running.', `${teamSay(t)} just won it. What a race! So close! Great running.`);
+      else if (this.solo)
+        Mini.finish(`${teamName(t)} win!`, 'You beat the computer! Brilliant running.', `${teamSay(t)} win! You beat the computer! Brilliant running.`);
+      else
+        Mini.finish(`${teamName(t)} win!`, 'What a race! Well run, both of you.', `${teamSay(t)} win! What a race! Well run, both of you.`);
     }
   },
-  // One lane, drawn as the bottom one; the top lane is the same drawing turned round.
+  // The computer's speed, in track per second.
+  cpu(dt){
+    const base = 1 / this.CPU_T, lead = this.q[1] - this.q[0];
+    let want = lead > this.CPU_LEAD ? base * .4 : base * Math.min(this.CPU_MAX, 1 + this.CPU_PUSH * Math.max(0, -lead - this.CPU_LEAD));
+    if (this.q[1] > .85) want *= .85;                // and it tires on the run-in
+    this.cpuRate += (want - this.cpuRate) * Math.min(1, dt * 3);
+    return this.cpuRate;
+  },
+  // One lane, drawn as the bottom one; the top lane is the same drawing turned round (2 players)
+  // or moved up (1 player).
   lane(i){
-    const W = this.W, H = this.H, y = H * .78, x0 = W * .14, x1 = W * .86, s = Math.min(58, H * .07);
-    Mini.line(x0 - s * .6, y + s * .7, x1 + s * .4, y + s * .7, 'rgba(255,255,255,.45)', 4);
-    for (let k = 0; k < 8; k++)                    // a chequered finish line
-      Mini.rect(x1 + s * .5 + (k % 2) * 8, y - s * 1.4 + k * s * .27, 8, s * .27, 0, k % 2 ? '#fff' : '#12301a');
-    // The finish tape across the lane, snapping in two for the winner.
-    const tx = x1 + s * .45, ty0 = y - s * 1.1, ty1 = y + s * .6, g = Mini.ctx();
-    g.strokeStyle = '#e63946'; g.lineWidth = 4; g.beginPath();
-    if (this.won === i){
-      const k = Math.min(1, this.tapeT * 2.5);
-      g.moveTo(tx, ty0); g.lineTo(tx + k * s * .8, ty0 + (ty1 - ty0) * .3 + k * s * .4);
-      g.moveTo(tx, ty1); g.lineTo(tx + k * s * .8, ty1 - (ty1 - ty0) * .3 + k * s * .2);
-    } else { g.moveTo(tx, ty0); g.lineTo(tx, ty1); }
-    g.stroke();
-    const x = x0 + (x1 - x0) * this.p[i];
-    Mini.runner(this.teams[i], x, y, s, this.phase[i]);
-    Mini.ballAt(x + s * .55, y + s * .45 - Math.abs(Math.sin(this.phase[i])) * s * .12, s * .2);
+    const { W, H, x0, L, s } = this.geo(), y = this.laneY(), cam = this.cam(i), g = Mini.ctx();
+    const X = d => d - cam;                          // track pixels to the screen
+    const top = y - s * 1.55, bot = y + s * 1.0;
+    // The running track: a red lane with white lines, and advert boards behind it.
+    g.fillStyle = '#c4553f'; g.fillRect(0, top, W, bot - top);
+    g.fillStyle = 'rgba(0,0,0,.08)';
+    for (let k = Math.floor(cam / 22) * 22; k < cam + W + 22; k += 22) g.fillRect(X(k), top, 11, bot - top);
+    Mini.line(0, top, W, top, '#fff', 3); Mini.line(0, bot, W, bot, '#fff', 3);
+    const bh = s * .55, by = top - bh - 4, bw = s * 3.2;
+    for (let k = Math.floor((cam - x0) / bw) - 1; k * bw < cam + W; k++){
+      const bx = X(k * bw);
+      Mini.rect(bx + 2, by, bw - 4, bh, 4, k % 2 ? '#0d1a5a' : '#12301a', 'rgba(255,255,255,.25)', 1);
+      Mini.text('GOAL MATHS', bx + bw / 2, by + bh / 2 + 1, bh * .52, k % 2 ? '#f5c400' : '#fff');
+    }
+    // Distance markers every 10 metres: a board with the number and a cone on the line.
+    const step = L / (this.METRES / 10);
+    for (let m = 1; m < this.METRES / 10; m++){
+      const mx = X(m * step);
+      if (mx < -s * 2 || mx > W + s * 2) continue;
+      Mini.line(mx, top, mx, bot, 'rgba(255,255,255,.55)', 3);
+      Mini.rect(mx - s * .55, by - s * .05, s * 1.1, bh + s * .1, 6, '#fff', '#12301a', 2);
+      Mini.text(`${m * 10}m`, mx, by + bh / 2 + 1, bh * .6, '#12301a');
+      g.fillStyle = '#ff8c1a'; g.beginPath(); g.moveTo(mx, bot - s * .55); g.lineTo(mx - s * .18, bot); g.lineTo(mx + s * .18, bot); g.closePath(); g.fill();
+    }
+    const sx = X(0);                                 // the start line
+    if (sx > -10 && sx < W + 10){ Mini.line(sx, top, sx, bot, '#fff', 5); }
+    const fx = X(L) + s * .5;                        // a chequered finish line
+    if (fx > -40 && fx < W + 40){
+      for (let k = 0; k < 9; k++)
+        Mini.rect(fx + (k % 2) * 8, top + k * (bot - top) / 9, 8, (bot - top) / 9 + .5, 0, k % 2 ? '#fff' : '#12301a');
+      // The finish tape across the lane, snapping in two for the winner.
+      const tx = fx - s * .05, ty0 = top + 4, ty1 = bot - 4;
+      g.strokeStyle = '#e63946'; g.lineWidth = 4; g.beginPath();
+      if (this.won === i){
+        const k = Math.min(1, this.tapeT * 2.5);
+        g.moveTo(tx, ty0); g.lineTo(tx + k * s * .8, ty0 + (ty1 - ty0) * .3 + k * s * .4);
+        g.moveTo(tx, ty1); g.lineTo(tx + k * s * .8, ty1 - (ty1 - ty0) * .3 + k * s * .2);
+      } else { g.moveTo(tx, ty0); g.lineTo(tx, ty1); }
+      g.stroke();
+    }
+    const x = X(this.p[i] * L);
+    Mini.runner(this.teams[i], x, y, s, this.legs[i]);
+    Mini.ballAt(x + s * .55, y + s * .45 - Math.abs(Math.sin(this.legs[i])) * s * .12, s * .2);
+    if (this.solo && i === 1) Mini.text('Computer', x, bot + s * .45, s * .42, '#fff');
     if (this.cd < this.READY){
-      const n = Math.min(2, Math.floor(this.cd / (this.READY / 3)));
-      Mini.text(['Ready...', 'Steady...', 'GO!'][n], W / 2, H * .64, Math.min(54, W * .13), n === 2 ? '#3cc35a' : '#f5c400');
-    } else if (!this.over && this.p[i] < .08) Mini.text('Tap tap tap!', W / 2, H * .62, Math.min(34, W * .085), '#f5c400');
+      if (this.cd >= 0 && (i === 0 || !this.solo)){
+        const n = Math.min(2, Math.floor(this.cd / (this.READY / 3)));
+        Mini.text(['Ready...', 'Steady...', 'GO!'][n], W / 2, H * .6, Math.min(54, W * .13), n === 2 ? '#3cc35a' : '#f5c400');
+      }
+    } else if (!this.over && this.p[i] < .04 && (i === 0 || !this.solo)) Mini.text('Tap tap tap!', W / 2, H * .6, Math.min(34, W * .085), '#f5c400');
+  },
+  // Who's winning, across the middle: a strip from the start to the flag with both shirts on it.
+  progress(){
+    const W = this.W, H = this.H, x0 = Math.max(W * .2, 80), x1 = W * .84, y = H / 2, s = Math.min(26, H * .032);
+    Mini.rect(x0 - 6, y - s * .3, x1 - x0 + 12, s * .6, s * .3, 'rgba(18,48,26,.75)', 'rgba(255,255,255,.6)', 2);
+    Mini.text('🏁', x1 + s * .9, y, s * 1.1);
+    [1, 0].forEach(i => Mini.shirtAt(this.teams[i], x0 + (x1 - x0) * this.p[i], y + (i ? -s * .35 : s * .35), s * 1.5));
   },
   draw(){
-    Mini.line(0, this.H / 2, this.W, this.H / 2, 'rgba(255,255,255,.55)', 4);
+    const W = this.W, H = this.H;
+    if (this.phase === 'choose'){
+      const g = Mini.ctx(), cs = this.cards();
+      Mini.text('One player or two?', W / 2, cs[0].y - H * .06, Math.min(40, W * .095));
+      cs.forEach(c => {
+        Mini.rect(c.x, c.y, c.w, c.h, 22, 'rgba(20,16,51,.88)', '#f5c400', 4);
+        const cx = c.x + c.w / 2;
+        g.font = `${c.w * .4}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+        g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+        g.fillText(c.kind === 'duo' ? '🧑‍🤝‍🧑' : '🏃', cx, c.y + c.h * .4);
+        Mini.text(c.kind === 'duo' ? '2 players' : '1 player', cx, c.y + c.h * .83, c.w * .15);
+      });
+      return;
+    }
     this.lane(0);
-    Mini.flip(() => this.lane(1));
+    if (this.solo){ const g = Mini.ctx(); g.save(); g.translate(0, -H * .42); this.lane(1); g.restore(); }
+    else Mini.flip(() => this.lane(1));
+    this.progress();
   }
 };
 
